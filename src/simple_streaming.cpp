@@ -20,12 +20,15 @@
 #include <cstring>
 #include <iostream>
 
+#include "caf/actor_system_config.hpp"
 #include "caf/all.hpp"
+#include "caf/defaults.hpp"
 #include "caf/io/all.hpp"
 #include "caf/io/network/default_multiplexer.hpp"
 #include "caf/io/network/scribe_impl.hpp"
 #include "caf/io/scribe.hpp"
 #include "caf/net/backend/test.hpp"
+#include "caf/net/defaults.hpp"
 #include "caf/net/middleman.hpp"
 #include "caf/net/stream_socket.hpp"
 #include "caf/net/tcp_accept_socket.hpp"
@@ -49,7 +52,7 @@ struct tick_state {
   size_t tick_count = 0;
 
   void tick() {
-    cout << count << endl;
+    cout << count << ", ";
     count = 0;
   }
 };
@@ -204,7 +207,7 @@ make_connected_tcp_socket_pair() {
     return res.error();
 }
 
-void io_run_sink(net::stream_socket first, net::stream_socket second,
+void io_run_sink(net::stream_socket, net::stream_socket second,
                  size_t iterations) {
   actor_system_config cfg;
   cfg.add_message_type<uint64_t>("uint64_t");
@@ -223,7 +226,7 @@ void io_run_sink(net::stream_socket first, net::stream_socket second,
     ->request(bb, infinite, connect_atom::value, std::move(scribe),
               uint16_t{8080})
     .receive(
-      [&](node_id&, strong_actor_ptr& ptr, std::set<std::string>& xs) {
+      [&](node_id&, strong_actor_ptr& ptr, std::set<std::string>&) {
         if (ptr == nullptr) {
           std::cerr << "ERROR: could not get a handle to remote source\n";
           return;
@@ -263,8 +266,9 @@ void net_run_sink(net::stream_socket first, net::stream_socket second,
   });
   self->receive([](done_atom) {
     std::cerr << "done" << std::endl;
-    // TODO: THIS IS A REALLY DIRTY HACK FOR BENCHING THE STACK PROPERLY.
+    std::cout << std::endl;
   });
+  // TODO: THIS IS A REALLY DIRTY HACK FOR BENCHING THE STACK PROPERLY.
   abort();
 }
 
@@ -311,6 +315,9 @@ void caf_main(actor_system& sys, const config& cfg) {
     }
     case net_bench_atom::uint_value(): {
       cerr << "run in 'netBench' mode " << endl;
+      auto workers = get_or(sys.config(), "middleman.serializing_workers",
+                            defaults::middleman::serializing_workers);
+      cout << workers << ", ";
       std::pair<net::stream_socket, net::stream_socket> sockets;
       if (auto res = make_connected_tcp_socket_pair()) {
         sockets = *res;
