@@ -28,6 +28,9 @@
 #include "caf/net/backend/test.hpp"
 #include "caf/net/middleman.hpp"
 #include "caf/net/stream_socket.hpp"
+#include "caf/net/tcp_accept_socket.hpp"
+#include "caf/net/tcp_stream_socket.hpp"
+#include "caf/uri.hpp"
 
 using namespace std;
 using namespace caf;
@@ -159,6 +162,34 @@ struct config : actor_system_config {
   uri mars_id;
 };
 
+expected<std::pair<net::stream_socket, net::stream_socket>>
+make_connected_tcp_socket_pair() {
+  using namespace net;
+  net::tcp_accept_socket acceptor;
+  uri::authority_type auth;
+  auth.port = 0;
+  auth.host = "0.0.0.0"s;
+  if (auto res = net::make_tcp_accept_socket(auth, false))
+    acceptor = *res;
+  else
+    return res.error();
+  uri::authority_type dst;
+  dst.host = "localhost"s;
+  if (auto port = local_port(socket_cast<network_socket>(acceptor)))
+    dst.port = *port;
+  else
+    return port.error();
+  tcp_stream_socket sock1;
+  if (auto res = make_connected_tcp_stream_socket(dst))
+    sock1 = *res;
+  else
+    return res.error();
+  if (auto res = accept(acceptor))
+    return make_pair(sock1, *res);
+  else
+    return res.error();
+}
+
 void io_run_sink(net::stream_socket first, net::stream_socket second) {
   actor_system_config cfg;
   cfg.add_message_type<uint64_t>("uint64_t");
@@ -227,8 +258,13 @@ void caf_main(actor_system& sys, const config& cfg) {
       break;
     case io_bench_atom::uint_value(): {
       puts("run in 'ioBench' mode");
-      auto sockets = *net::make_stream_socket_pair();
-      printf("sockets: %d, %d\n", sockets.first.id, sockets.second.id);
+      std::pair<net::stream_socket, net::stream_socket> sockets;
+      if (auto res = make_connected_tcp_socket_pair()) {
+        sockets = *res;
+      } else {
+        std::cerr << "socket creation failed" << std::endl;
+        return;
+      }      printf("sockets: %d, %d\n", sockets.first.id, sockets.second.id);
       auto src = sys.spawn(source, false);
       using io::network::scribe_impl;
       auto& mm = sys.middleman();
@@ -244,7 +280,13 @@ void caf_main(actor_system& sys, const config& cfg) {
     }
     case net_bench_atom::uint_value(): {
       puts("run in 'netBench' mode");
-      auto sockets = *net::make_stream_socket_pair();
+      std::pair<net::stream_socket, net::stream_socket> sockets;
+      if (auto res = make_connected_tcp_socket_pair()) {
+        sockets = *res;
+      } else {
+        std::cerr << "socket creation failed" << std::endl;
+        return;
+      }
       printf("sockets: %d, %d\n", sockets.first.id, sockets.second.id);
       auto src = sys.spawn(source, false);
       sys.registry().put(atom("source"), src);
