@@ -29,6 +29,9 @@
 #include "caf/net/backend/test.hpp"
 #include "caf/net/middleman.hpp"
 #include "caf/net/stream_socket.hpp"
+#include "caf/net/tcp_accept_socket.hpp"
+#include "caf/net/tcp_stream_socket.hpp"
+#include "caf/uri.hpp"
 
 using namespace std;
 using namespace caf;
@@ -110,6 +113,34 @@ struct config : actor_system_config {
   uri earth_id;
   uri mars_id;
 };
+
+expected<std::pair<net::stream_socket, net::stream_socket>>
+make_connected_tcp_socket_pair() {
+  using namespace net;
+  net::tcp_accept_socket acceptor;
+  uri::authority_type auth;
+  auth.port = 0;
+  auth.host = "0.0.0.0"s;
+  if (auto res = net::make_tcp_accept_socket(auth, false))
+    acceptor = *res;
+  else
+    return res.error();
+  uri::authority_type dst;
+  dst.host = "localhost"s;
+  if (auto port = local_port(socket_cast<network_socket>(acceptor)))
+    dst.port = *port;
+  else
+    return port.error();
+  tcp_stream_socket sock1;
+  if (auto res = make_connected_tcp_stream_socket(dst))
+    sock1 = *res;
+  else
+    return res.error();
+  if (auto res = accept(acceptor))
+    return make_pair(sock1, *res);
+  else
+    return res.error();
+}
 
 void io_run_source(net::stream_socket first, net::stream_socket second,
                    size_t num_messages) {
@@ -193,7 +224,13 @@ void caf_main(actor_system& sys, const config& cfg) {
   switch (static_cast<uint64_t>(cfg.mode)) {
     case io_bench_atom::uint_value(): {
       puts("run in 'ioBench' mode");
-      auto sockets = *net::make_stream_socket_pair();
+      std::pair<net::stream_socket, net::stream_socket> sockets;
+      if (auto res = make_connected_tcp_socket_pair()) {
+        sockets = *res;
+      } else {
+        std::cerr << "socket creation failed" << std::endl;
+        return;
+      }
       printf("sockets: %d, %d\n", sockets.first.id, sockets.second.id);
       auto src = sys.spawn(sink);
       using io::network::scribe_impl;
@@ -209,7 +246,13 @@ void caf_main(actor_system& sys, const config& cfg) {
     case net_bench_atom::uint_value(): {
       puts("run in 'netBench' mode");
       auto num_messages = cfg.num_messages;
-      auto sockets = *net::make_stream_socket_pair();
+      std::pair<net::stream_socket, net::stream_socket> sockets;
+      if (auto res = make_connected_tcp_socket_pair()) {
+        sockets = *res;
+      } else {
+        std::cerr << "socket creation failed" << std::endl;
+        return;
+      }
       printf("sockets: %d, %d\n", sockets.first.id, sockets.second.id);
       auto src = sys.spawn(sink);
       sys.registry().put(atom("source"), src);
