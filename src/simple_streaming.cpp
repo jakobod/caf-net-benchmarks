@@ -278,6 +278,11 @@ void caf_main(actor_system& sys, const config& cfg) {
       hdl = sys.spawn(stage) * hdl;
     return hdl;
   };
+  auto serializer = get_or(sys.config(), "middleman.serializing_workers",
+                           defaults::middleman::serializing_workers);
+  auto deserializer = get_or(sys.config(), "middleman.workers",
+                             defaults::middleman::workers);
+  cout << serializer << ", " << deserializer << ", ";
   switch (static_cast<uint64_t>(cfg.mode)) {
     case local_bench_atom::uint_value(): {
       cerr << "run in 'localBench' mode" << endl;
@@ -315,9 +320,6 @@ void caf_main(actor_system& sys, const config& cfg) {
     }
     case net_bench_atom::uint_value(): {
       cerr << "run in 'netBench' mode " << endl;
-      auto workers = get_or(sys.config(), "middleman.serializing_workers",
-                            defaults::middleman::serializing_workers);
-      cout << workers << ", ";
       std::pair<net::stream_socket, net::stream_socket> sockets;
       if (auto res = make_connected_tcp_socket_pair()) {
         sockets = *res;
