@@ -55,3 +55,12 @@ for i in {0..4}; do
   echo ""
 done
 
+file_name="${output_folder}/io-x-deserializer"
+init_file $file_name
+for i in {0..4}; do
+  echo "[$i:0]:"
+  update_caf_application_ini 0 $i
+  ./release/simple_streaming -mioBench >> ${file_name}.csv 2> ${file_name}.err
+  echo ""
+  echo ""
+done

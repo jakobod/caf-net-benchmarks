@@ -69,8 +69,9 @@ behavior source(stateful_actor<source_state>* self, bool print_rate,
   return {[=](tick_atom) {
             self->delayed_send(self, std::chrono::seconds(1), tick_atom::value);
             self->state.tick();
-            if (self->state.tick_count++ >= iterations)
+            if (self->state.tick_count++ >= iterations) {
               self->quit();
+            }
           },
           [=](start_atom) {
             cerr << "START from: " << to_string(self->current_sender()).c_str()
@@ -316,6 +317,8 @@ void caf_main(actor_system& sys, const config& cfg) {
       };
       std::thread t{f};
       t.join();
+      anon_send_exit(src, exit_reason::user_shutdown);
+      std::cout << std::endl;
       break;
     }
     case net_bench_atom::uint_value(): {

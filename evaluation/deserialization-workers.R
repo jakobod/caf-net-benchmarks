@@ -5,18 +5,24 @@ require(gridExtra)
 
 source("evaluation/human_readable.R")
 
-ppconserwork <- read.csv("evaluation/out/0serializer-x-deserializer.csv", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
-ppconserwork$avg <- rowMeans(ppconserwork[,3:12])
-ppconserwork$sdev <- apply(ppconserwork[,3:12], 1, sd)
-ppconserwork$proto <- '0-serializing workers'
+net_zero_workers_data <- read.csv("evaluation/out/0serializer-x-deserializer.csv", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+net_zero_workers_data$avg <- rowMeans(net_zero_workers_data[,3:12])
+net_zero_workers_data$sdev <- apply(net_zero_workers_data[,3:12], 1, sd)
+net_zero_workers_data$proto <- '0 serializing workers (net)'
 
-ppcondeserwork <- read.csv("evaluation/out/4serializer-x-deserializer.csv", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
-ppcondeserwork$avg <- rowMeans(ppcondeserwork[,3:12])
-ppcondeserwork$sdev <- apply(ppcondeserwork[,3:12], 1, sd)
-ppcondeserwork$proto <- '4-serializing workers'
+net_four_workers_data <- read.csv("evaluation/out/4serializer-x-deserializer.csv", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+net_four_workers_data$avg <- rowMeans(net_four_workers_data[,3:12])
+net_four_workers_data$sdev <- apply(net_four_workers_data[,3:12], 1, sd)
+net_four_workers_data$proto <- '4 serializing workers (net)'
 
-ppdf <- rbind(ppconserwork)
-ppdf <- rbind(ppdf, ppcondeserwork)
+io_data <- read.csv("evaluation/out/io-x-deserializer.csv", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+io_data$avg <- rowMeans(io_data[,3:12])
+io_data$sdev <- apply(io_data[,3:12], 1, sd)
+io_data$proto <- '0 serializing workers (io)'
+
+ppdf <- rbind(net_zero_workers_data)
+ppdf <- rbind(ppdf, net_four_workers_data)
+ppdf <- rbind(ppdf, io_data)
 ppdf$upper <- ppdf$avg + ppdf$sdev
 ppdf$lower <- ppdf$avg - ppdf$sdev
 
@@ -37,6 +43,7 @@ pp_plot <- ggplot(ppdf, aes(x=deserializer, y=avg, color=proto)) +
   theme_bw() +
   theme(
     legend.title=element_blank(),
+    #legend.text = element_text(size = 5),
     legend.key=element_rect(fill='white'), 
     legend.background=element_rect(fill="white", colour="black", size=0.25),
     legend.direction="vertical",
@@ -44,12 +51,14 @@ pp_plot <- ggplot(ppdf, aes(x=deserializer, y=avg, color=proto)) +
     legend.position=c(0,1),
     # legend box background color
     legend.box.margin=margin(c(3, 3, 3, 3)),
-    legend.key.size=unit(0.8, 'lines'),
+    legend.key.height=unit(0.4,"line"),
+    legend.key.size=unit(0.6, 'lines'),
     text=element_text(size=9),
     strip.text.x=element_blank()
   ) +
   # scale_color_grey() +
-  scale_color_brewer(type="qual", palette=6) +
+  #scale_color_brewer(type="qual", palette=6) +
+  scale_color_manual(values=c('#4daf4a', '#e41a1c', '#377eb8')) +
   ggtitle("Variable deserializing workers") +
   labs(x="deserializing workers [#]", y="throughput [msg/s]")
 
@@ -57,5 +66,4 @@ tikz(file="figs/deserializing_workers.tikz", sanitize=TRUE, width=3.4, height=2.
 pp_plot
 dev.off()
 
-ggsave("figs/deserializing_workers.pdf", plot=pp_plot, width=3.4, height=2.3)
-
+ggsave("figs/deserializing_workers.pdf", plot=pp_plot, width=5, height=3)
