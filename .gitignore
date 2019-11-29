@@ -1,2 +1,4 @@
 evaluation/out
+*.tikz
+.Rhistory
 

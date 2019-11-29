@@ -144,7 +144,7 @@ behavior sink(stateful_actor<sink_state>* self, actor src, actor listener,
                                  "got x = "
                                    << x << " | expected: "
                                    << CAF_ARG2("x", self->state.sequence));
-                self->state.sequence = ++x;
+                self->state.sequence++;
                 ++self->state.count;
               },
               // cleanup
