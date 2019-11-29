@@ -19,13 +19,13 @@ human_numbers <- function(x = NULL, smbl ="", signif = 1){
       if ( k < 1 ) {
         paste0( y_is_positive, smbl, round(abs(y), signif ))
       } else if ( m < 1){
-        paste0 (y_is_positive, smbl,  k , "k")
+        paste0 (y_is_positive, smbl,  k , "K")
       } else if (b < 1){
-        paste0 (y_is_positive, smbl, m ,"m")
+        paste0 (y_is_positive, smbl, m ,"M")
       }else if(tn < 1){
-        paste0 (y_is_positive, smbl, b ,"bn")
+        paste0 (y_is_positive, smbl, b ,"Bn")
       } else {
-        paste0 (y_is_positive, smbl,  comma(tn), "tn")
+        paste0 (y_is_positive, smbl,  comma(tn), "Tn")
       }
     } else if (is.na(y) | is.null(y)){
       "-"

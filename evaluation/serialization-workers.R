@@ -51,7 +51,7 @@ pp_plot <- ggplot(ppdf, aes(x=serializer, y=avg, color=proto)) +
   # scale_color_grey() +
   scale_color_brewer(type="qual", palette=6) +
   ggtitle("Variable serializing workers") +
-  labs(x="workers", y="throughput [msg/s]")
+  labs(x="workers [#]", y="throughput [msg/s]")
 
 tikz(file="figs/serializing_workers.tikz", sanitize=TRUE, width=3.4, height=2.3)
 pp_plot
