@@ -5,15 +5,10 @@ require(gridExtra)
 
 source("evaluation/human_readable.R")
 
-net_zero_workers_data <- read.csv("evaluation/out/0serializer-x-deserializer.csv", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+net_zero_workers_data <- read.csv("evaluation/out/0serializer-mpx--x-deserializer.csv", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 net_zero_workers_data$avg <- rowMeans(net_zero_workers_data[,3:12])
 net_zero_workers_data$sdev <- apply(net_zero_workers_data[,3:12], 1, sd)
 net_zero_workers_data$proto <- '0 workers (net)'
-
-net_four_workers_data <- read.csv("evaluation/out/4serializer-x-deserializer.csv", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
-net_four_workers_data$avg <- rowMeans(net_four_workers_data[,3:12])
-net_four_workers_data$sdev <- apply(net_four_workers_data[,3:12], 1, sd)
-net_four_workers_data$proto <- '4 workers (net)'
 
 io_data <- read.csv("evaluation/out/io-x-deserializer.csv", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 io_data$avg <- rowMeans(io_data[,3:12])
@@ -21,7 +16,6 @@ io_data$sdev <- apply(io_data[,3:12], 1, sd)
 io_data$proto <- '0 workers (io)'
 
 ppdf <- rbind(net_zero_workers_data)
-ppdf <- rbind(ppdf, net_four_workers_data)
 ppdf <- rbind(ppdf, io_data)
 ppdf$upper <- ppdf$avg + ppdf$sdev
 ppdf$lower <- ppdf$avg - ppdf$sdev
@@ -39,7 +33,7 @@ pp_plot <- ggplot(ppdf, aes(x=deserializer, y=avg, color=proto)) +
   ) +
   scale_shape_manual(values=c(1, 4, 3)) +
   scale_x_continuous(breaks=seq(0, 5, 1)) + # expand=c(0, 0), limits=c(0, 10)
-  scale_y_continuous(labels = human_numbers, limits=c(50000000, 150000000), breaks=seq(40000000, 150000000, 10000000)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_y_continuous(labels = human_numbers, limits=c(55000000, 90000000), breaks=seq(40000000, 150000000, 10000000)) + # expand=c(0, 0), limits=c(0, 10)
   theme_bw() +
   theme(
     legend.title=element_blank(),
@@ -62,8 +56,8 @@ pp_plot <- ggplot(ppdf, aes(x=deserializer, y=avg, color=proto)) +
   ggtitle("Variable deserializing workers") +
   labs(x="deserializing workers [#]", y="throughput [msg/s]")
 
-tikz(file="figs/deserializing_workers.tikz", sanitize=TRUE, width=3.4, height=2.3)
+tikz(file="figs/deserializing_workers-mpx.tikz", sanitize=TRUE, width=3.4, height=2.3)
 pp_plot
 dev.off()
 
-ggsave("figs/deserializing_workers.pdf", plot=pp_plot, width=5, height=3)
+ggsave("figs/deserializing_workers-mpx.pdf", plot=pp_plot, width=5, height=3)

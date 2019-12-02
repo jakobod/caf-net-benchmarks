@@ -8,12 +8,12 @@ source("evaluation/human_readable.R")
 ppconserwork <- read.csv("evaluation/out/x-serializer-0-deserializer.csv", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 ppconserwork$avg <- rowMeans(ppconserwork[,3:12])
 ppconserwork$sdev <- apply(ppconserwork[,3:12], 1, sd)
-ppconserwork$proto <- '0 deserializing workers'
+ppconserwork$proto <- 'workers (net)'
 
 ppcondeserwork <- read.csv("evaluation/out/x-serializer-4-deserializer.csv", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 ppcondeserwork$avg <- rowMeans(ppcondeserwork[,3:12])
 ppcondeserwork$sdev <- apply(ppcondeserwork[,3:12], 1, sd)
-ppcondeserwork$proto <- '4 deserializing workers'
+ppcondeserwork$proto <- '4 workers (net)'
 
 ppdf <- rbind(ppconserwork)
 ppdf <- rbind(ppdf, ppcondeserwork)
