@@ -5,15 +5,15 @@ require(gridExtra)
 
 source("evaluation/human_readable.R")
 
-ppconserwork <- read.csv("evaluation/out/x-ser-0-deser.csv", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+ppconserwork <- read.csv("evaluation/merged/x-ser-0-deser.csv", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 ppconserwork$avg <- rowMeans(ppconserwork[,3:12])
 ppconserwork$sdev <- apply(ppconserwork[,3:12], 1, sd)
-ppconserwork$proto <- 'workers (net)'
+ppconserwork$proto <- '0 deserializing workers'
 
-ppcondeserwork <- read.csv("evaluation/out/x-ser-4-deser.csv", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+ppcondeserwork <- read.csv("evaluation/merged/x-ser-4-deser.csv", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 ppcondeserwork$avg <- rowMeans(ppcondeserwork[,3:12])
 ppcondeserwork$sdev <- apply(ppcondeserwork[,3:12], 1, sd)
-ppcondeserwork$proto <- '4 workers (net)'
+ppcondeserwork$proto <- '4 deserializing workers'
 
 ppdf <- rbind(ppconserwork)
 ppdf <- rbind(ppdf, ppcondeserwork)
@@ -33,7 +33,7 @@ pp_plot <- ggplot(ppdf, aes(x=serializer, y=avg, color=proto)) +
   ) +
   scale_shape_manual(values=c(1, 4, 3)) +
   scale_x_continuous(breaks=seq(0, 5, 1)) + # expand=c(0, 0), limits=c(0, 10)
-  scale_y_continuous(labels = human_numbers, limits=c(60000000, 150000000), breaks=seq(60000000, 150000000, 10000000)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_y_continuous(labels = human_numbers, limits=c(530000000, 1100000000), breaks=seq(530000000, 1100000000, 100000000)) + # expand=c(0, 0), limits=c(0, 10)
   theme_bw() +
   theme(
     legend.title=element_blank(),
@@ -51,11 +51,11 @@ pp_plot <- ggplot(ppdf, aes(x=serializer, y=avg, color=proto)) +
   # scale_color_grey() +
   scale_color_brewer(type="qual", palette=6) +
   ggtitle("Variable serializing workers") +
-  labs(x="serializing workers [#]", y="throughput [msg/s]")
+  labs(x="serializing workers [#]", y="throughput [Byte/s]")
 
-tikz(file="figs/serializing_workers.tikz", sanitize=TRUE, width=3.4, height=2.3)
+tikz(file="figs/serializing_workers-bytes.tikz", sanitize=TRUE, width=3.4, height=2.3)
 pp_plot
 dev.off()
 
-ggsave("figs/serializing_workers.pdf", plot=pp_plot, width=3.4, height=2.3)
+ggsave("figs/serializing_workers-bytes.pdf", plot=pp_plot, width=5, height=3)
 
