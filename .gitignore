@@ -1,4 +1,4 @@
-evaluation/out
+evaluation/out/*
 *.tikz
 .Rhistory
-
+evaluation/merged/*
