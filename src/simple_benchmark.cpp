@@ -17,16 +17,18 @@
  * http://www.boost.org/LICENSE_1_0.txt.                                      *
  ******************************************************************************/
 
-#include <chrono>
 #include <cstring>
 #include <iostream>
 
+#include "caf/actor_system_config.hpp"
 #include "caf/all.hpp"
+#include "caf/defaults.hpp"
 #include "caf/io/all.hpp"
 #include "caf/io/network/default_multiplexer.hpp"
 #include "caf/io/network/scribe_impl.hpp"
 #include "caf/io/scribe.hpp"
 #include "caf/net/backend/test.hpp"
+#include "caf/net/defaults.hpp"
 #include "caf/net/middleman.hpp"
 #include "caf/net/stream_socket.hpp"
 #include "caf/net/tcp_accept_socket.hpp"
@@ -39,79 +41,87 @@ using namespace caf;
 namespace {
 
 using start_atom = atom_constant<atom("start")>;
+using tick_atom = atom_constant<atom("tick")>;
 using ping_atom = atom_constant<atom("ping")>;
 using pong_atom = atom_constant<atom("pong")>;
-using hello_atom = atom_constant<atom("hello")>;
 using done_atom = atom_constant<atom("done")>;
+
 using io_bench_atom = atom_constant<atom("ioBench")>;
 using net_bench_atom = atom_constant<atom("netBench")>;
 using local_bench_atom = atom_constant<atom("localBench")>;
 
-struct source_state {
-  size_t messages = 0;
+using socket_pair = pair<net::stream_socket, net::stream_socket>;
+
+struct tick_state {
+  size_t count = 0;
+  size_t tick_count = 0;
+
+  void tick() {
+    cout << count << ", " << std::endl;
+    count = 0;
+  }
 };
 
-behavior source(stateful_actor<source_state>* self, actor other, actor,
-                size_t num_messages) {
+struct source_state : tick_state {};
+
+/// This actor will start a pingpong, answer any pong and print counts
+behavior ping_actor(stateful_actor<source_state>* self, actor sink,
+                    actor listener, size_t iterations) {
+  self->send(sink, ping_atom::value);
+  self->delayed_send(self, std::chrono::seconds(1), tick_atom::value);
   return {
-    [=](start_atom) {
-      printf("START from: %s\n", to_string(self->current_sender()).c_str());
-      self->send(other, hello_atom::value, self);
-    },
-    [=](hello_atom) { self->send(other, ping_atom::value); },
-    [=](pong_atom) {
-      if ((++self->state.messages % 1000) == 0)
-        std::cout << "got " << self->state.messages << " messages" << std::endl;
-      if (self->state.messages >= num_messages) {
-        // self->send(listener, done_atom::value);
+    [=](tick_atom) {
+      self->delayed_send(self, std::chrono::seconds(1), tick_atom::value);
+      self->state.tick();
+      if (self->state.tick_count++ >= iterations) {
         self->quit();
-        return;
+        self->send(listener, done_atom::value);
       }
-      self->send(other, ping_atom::value);
+    },
+    [=](pong_atom) {
+      self->state.count++;
+      return ping_atom::value;
     },
   };
 }
 
-struct sink_state {
-  actor other;
-};
-
-behavior sink(stateful_actor<sink_state>* self) {
-  self->set_down_handler([=](const down_msg&) {
-    std::cout << "sink down_handler" << std::endl;
-    self->quit();
-  });
-  return {
-    [=](hello_atom, actor other) {
-      self->state.other = other;
-      self->monitor(other);
-      self->send(other, hello_atom::value);
-    },
-    [=](ping_atom) { self->send(self->state.other, pong_atom::value); },
-  };
+/// This actor will just answer any incoming ping
+behavior pong_actor(event_based_actor*) {
+  return {[](ping_atom) { return pong_atom::value; }};
 }
 
 struct config : actor_system_config {
   config() {
     opt_group{custom_options_, "global"}
-      .add(mode, "mode,m", "one of 'local', 'ioBench', or 'netBench'")
+      .add(mode, "mode,m", "one of 'ioBench', or 'netBench'")
       .add(num_stages, "num-stages,n",
            "number of stages after source / before sink")
-      .add(num_messages, "num-messages,M", "number of messages to send");
-    add_message_type<string>("string");
+      .add(iterations, "iterations,i",
+           "number of iterations that should be run")
+      .add(num_pairs, "num-pairs,p",
+           "number of src/sink pairs that should be run");
+
+    add_message_type<uint64_t>("uint64_t");
     earth_id = *make_uri("test://earth");
     mars_id = *make_uri("test://mars");
     put(content, "middleman.this-node", earth_id);
     load<net::middleman, net::backend::test>();
     set("logger.file-verbosity", atom("trace"));
     set("logger.file-name", "source.log");
+    actor_atoms = std::vector<atom_value>{
+      atom("actor0"), atom("actor1"), atom("actor2"),  atom("actor3"),
+      atom("actor4"), atom("actor5"), atom("actor6"),  atom("actor7"),
+      atom("actor8"), atom("actor9"), atom("actor10"),
+    };
   }
 
-  int num_messages = 10000;
   int num_stages = 0;
+  size_t iterations = 10;
   atom_value mode;
   uri earth_id;
   uri mars_id;
+  size_t num_pairs = 1;
+  std::vector<atom_value> actor_atoms;
 };
 
 expected<std::pair<net::stream_socket, net::stream_socket>>
@@ -142,11 +152,9 @@ make_connected_tcp_socket_pair() {
     return res.error();
 }
 
-void io_run_source(net::stream_socket first, net::stream_socket second,
-                   size_t num_messages) {
-  using namespace std::chrono;
+void io_run_ping_actor(socket_pair sockets, size_t, size_t iterations) {
   actor_system_config cfg;
-  cfg.add_message_type<string>("string");
+  cfg.add_message_type<uint64_t>("uint64_t");
   cfg.load<io::middleman>();
   cfg.parse(0, nullptr);
   cfg.set("logger.file-verbosity", atom("trace"));
@@ -155,42 +163,32 @@ void io_run_source(net::stream_socket first, net::stream_socket second,
   using io::network::scribe_impl;
   auto& mm = sys.middleman();
   auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
-  io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, second.id);
+  io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, sockets.second.id);
   auto bb = mm.named_broker<io::basp_broker>(atom("BASP"));
   scoped_actor self{sys};
-  milliseconds start;
-  actor sink;
   self
     ->request(bb, infinite, connect_atom::value, std::move(scribe),
               uint16_t{8080})
     .receive(
-      [&](node_id&, strong_actor_ptr& ptr, std::set<std::string>& xs) {
+      [&](node_id&, strong_actor_ptr& ptr, std::set<std::string>&) {
         if (ptr == nullptr) {
           std::cerr << "ERROR: could not get a handle to remote source\n";
           return;
         }
-        auto src = sys.spawn(source, actor_cast<actor>(ptr), self,
-                             num_messages);
-        start = duration_cast<milliseconds>(
-          system_clock::now().time_since_epoch());
-        self->send(src, start_atom::value);
+        sys.spawn(ping_actor, actor_cast<actor>(ptr), self, iterations);
       },
       [&](error& err) {
         std::cerr << "ERROR: " << sys.render(err) << std::endl;
       });
-  self->await_all_other_actors_done();
-  auto end = duration_cast<milliseconds>(
-    system_clock::now().time_since_epoch());
-  std::cout << (end - start).count() << "ms" << std::endl;
+  self->receive([](done_atom) {});
 }
 
-void net_run_source(net::stream_socket first, net::stream_socket second,
-                    size_t num_messages) {
-  using namespace std::chrono;
+void net_run_ping_actor(socket_pair sockets, size_t num_pairs,
+                        size_t iterations) {
   auto mars_id = *make_uri("test://mars");
   auto earth_id = *make_uri("test://earth");
   actor_system_config cfg;
-  cfg.add_message_type<string>("string");
+  cfg.add_message_type<uint64_t>("uint64_t");
   cfg.load<net::middleman, net::backend::test>();
   cfg.parse(0, nullptr);
   cfg.set("logger.file-verbosity", atom("trace"));
@@ -200,39 +198,52 @@ void net_run_source(net::stream_socket first, net::stream_socket second,
   actor_system sys{cfg};
   auto& mm = sys.network_manager();
   auto& backend = *dynamic_cast<net::backend::test*>(mm.backend("test"));
-  backend.emplace(make_node_id(earth_id), second, first);
-  auto locator = *make_uri("test://earth/name/source");
+  backend.emplace(make_node_id(earth_id), sockets.second, sockets.first);
   scoped_actor self{sys};
-  puts("resolve locator");
-  mm.resolve(locator, self);
-  milliseconds start;
-  actor sink;
-  self->receive([&](strong_actor_ptr& ptr, const std::set<std::string>&) {
-    printf("got soure: %s -> run\n", to_string(ptr).c_str());
-    auto src = sys.spawn(source, actor_cast<actor>(ptr), self, num_messages);
-    start = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
-    self->send(src, start_atom::value);
-  });
-  self->await_all_other_actors_done();
-  auto end = duration_cast<milliseconds>(
-    system_clock::now().time_since_epoch());
-  std::cout << (end - start).count() << "ms" << std::endl;
+  for (size_t i = 0; i < num_pairs; ++i) {
+    auto locator = *make_uri("test://earth/name/actor" + to_string(i));
+    cerr << "resolve locator: " << to_string(locator) << endl;
+    mm.resolve(locator, self);
+  }
+  std::vector<actor> pong_actors;
+  for (size_t i = 0; i < num_pairs; ++i) {
+    self->receive([&](strong_actor_ptr& ptr, const std::set<std::string>&) {
+      std::cerr << "got source: " << to_string(ptr).c_str() << " -> run"
+                << std::endl;
+      pong_actors.emplace_back(
+        sys.spawn(ping_actor, actor_cast<actor>(ptr), self, iterations));
+    });
+  }
+  size_t done_count = 0;
+  while (done_count < num_pairs)
+    self->receive([&done_count](done_atom) {
+      ++done_count;
+      std::cout << "received done" << std::endl;
+    });
+  // TODO: THIS IS A REALLY DIRTY HACK FOR BENCHING THE STACK PROPERLY.
+  std::cout << "done" << std::endl;
   abort();
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
+  auto serializer = get_or(sys.config(), "middleman.serializing_workers",
+                           defaults::middleman::serializing_workers);
+  auto deserializer = get_or(sys.config(), "middleman.workers",
+                             defaults::middleman::workers);
+  cout << serializer << ", " << deserializer << ", ";
   switch (static_cast<uint64_t>(cfg.mode)) {
     case io_bench_atom::uint_value(): {
-      puts("run in 'ioBench' mode");
+      cerr << "run in 'ioBench' mode" << std::endl;
       std::pair<net::stream_socket, net::stream_socket> sockets;
       if (auto res = make_connected_tcp_socket_pair()) {
         sockets = *res;
       } else {
-        std::cerr << "socket creation failed" << std::endl;
+        std::cerr << "ERROR: socket creation failed" << std::endl;
         return;
       }
-      printf("sockets: %d, %d\n", sockets.first.id, sockets.second.id);
-      auto src = sys.spawn(sink);
+      cerr << "sockets: " << sockets.first.id << ", " << sockets.second.id
+           << endl;
+      auto src = sys.spawn(pong_actor);
       using io::network::scribe_impl;
       auto& mm = sys.middleman();
       auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
@@ -240,27 +251,43 @@ void caf_main(actor_system& sys, const config& cfg) {
       auto bb = mm.named_broker<io::basp_broker>(atom("BASP"));
       anon_send(bb, publish_atom::value, std::move(scribe), uint16_t{8080},
                 actor_cast<strong_actor_ptr>(src), std::set<std::string>{});
-      io_run_source(sockets.first, sockets.second, cfg.num_messages);
+      auto f = [sockets, &cfg] {
+        io_run_ping_actor(sockets, cfg.num_pairs, cfg.iterations);
+      };
+      std::thread t{f};
+      t.join();
+      anon_send_exit(src, exit_reason::user_shutdown);
+      std::cout << std::endl;
       break;
     }
     case net_bench_atom::uint_value(): {
-      puts("run in 'netBench' mode");
-      auto num_messages = cfg.num_messages;
-      std::pair<net::stream_socket, net::stream_socket> sockets;
-      if (auto res = make_connected_tcp_socket_pair()) {
-        sockets = *res;
-      } else {
-        std::cerr << "socket creation failed" << std::endl;
+      if (cfg.num_pairs > cfg.actor_atoms.size()) {
+        cerr << "ERROR: number of pairs should not be greater than "
+             << cfg.actor_atoms.size() << endl;
         return;
       }
-      printf("sockets: %d, %d\n", sockets.first.id, sockets.second.id);
-      auto src = sys.spawn(sink);
-      sys.registry().put(atom("source"), src);
+      cerr << "run in 'netBench' mode " << endl;
+      auto sockets = *make_connected_tcp_socket_pair();
+      cerr << "sockets: " << sockets.first.id << ", " << sockets.second.id
+           << std::endl;
+      cerr << "spawn " << cfg.num_pairs << " pong_actors" << endl;
+      std::vector<actor> pong_actors;
+      for (size_t i = 0; i < cfg.num_pairs; ++i) {
+        auto src = sys.spawn(pong_actor);
+        sys.registry().put(cfg.actor_atoms.at(i), src);
+        pong_actors.emplace_back(std::move(src));
+      }
       auto& mm = sys.network_manager();
       auto& backend = *dynamic_cast<net::backend::test*>(mm.backend("test"));
       backend.emplace(make_node_id(cfg.mars_id), sockets.first, sockets.second);
-      puts("spin up second actor sytem");
-      net_run_source(sockets.first, sockets.second, num_messages);
+      cerr << "spin up second actor sytem" << endl;
+      auto f = [sockets, &cfg] {
+        net_run_ping_actor(sockets, cfg.num_pairs, cfg.iterations);
+      };
+      thread t{f};
+      t.join();
+      for (auto& a : pong_actors)
+        anon_send_exit(a, exit_reason::user_shutdown);
       break;
     }
   }
