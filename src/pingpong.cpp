@@ -17,7 +17,6 @@
  * http://www.boost.org/LICENSE_1_0.txt.                                      *
  ******************************************************************************/
 
-#include <cstring>
 #include <iostream>
 
 #include "caf/actor_system_config.hpp"
@@ -64,10 +63,12 @@ struct tick_state {
 
 struct source_state : tick_state {};
 
-/// This actor will start a pingpong, answer any pong and print counts
+/// This actor will start a pingpong, answer any pong and print counts.
+/// Object is what should be sent.
+template <class Object>
 behavior ping_actor(stateful_actor<source_state>* self, actor sink,
-                    actor listener, size_t iterations) {
-  self->send(sink, ping_atom::value);
+                    actor listener, size_t iterations, Object to_send) {
+  self->send(sink, to_send);
   self->delayed_send(self, std::chrono::seconds(1), tick_atom::value);
   return {
     [=](tick_atom) {
@@ -78,16 +79,17 @@ behavior ping_actor(stateful_actor<source_state>* self, actor sink,
         self->send(listener, done_atom::value);
       }
     },
-    [=](pong_atom) {
+    [=](Object& obj) {
       self->state.count++;
-      return ping_atom::value;
+      return obj;
     },
   };
 }
 
-/// This actor will just answer any incoming ping
+/// Object is what should be sent.
+template <class Object>
 behavior pong_actor(event_based_actor*) {
-  return {[](ping_atom) { return pong_atom::value; }};
+  return {[](Object& obj) { return obj; }};
 }
 
 struct config : actor_system_config {
@@ -175,7 +177,8 @@ void io_run_ping_actor(socket_pair sockets, size_t, size_t iterations) {
           std::cerr << "ERROR: could not get a handle to remote source\n";
           return;
         }
-        sys.spawn(ping_actor, actor_cast<actor>(ptr), self, iterations);
+        sys.spawn(ping_actor<std::vector<uint64_t>>, actor_cast<actor>(ptr),
+                  self, iterations, std::vector<uint64_t>(1000000));
       },
       [&](error& err) {
         std::cerr << "ERROR: " << sys.render(err) << std::endl;
@@ -211,7 +214,8 @@ void net_run_ping_actor(socket_pair sockets, size_t num_pairs,
       std::cerr << "got source: " << to_string(ptr).c_str() << " -> run"
                 << std::endl;
       pong_actors.emplace_back(
-        sys.spawn(ping_actor, actor_cast<actor>(ptr), self, iterations));
+        sys.spawn(ping_actor<std::vector<uint64_t>>, actor_cast<actor>(ptr),
+                  self, iterations, std::vector<uint64_t>(1000000)));
     });
   }
   size_t done_count = 0;
@@ -243,7 +247,7 @@ void caf_main(actor_system& sys, const config& cfg) {
       }
       cerr << "sockets: " << sockets.first.id << ", " << sockets.second.id
            << endl;
-      auto src = sys.spawn(pong_actor);
+      auto src = sys.spawn(pong_actor<std::vector<uint64_t>>);
       using io::network::scribe_impl;
       auto& mm = sys.middleman();
       auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
@@ -273,7 +277,7 @@ void caf_main(actor_system& sys, const config& cfg) {
       cerr << "spawn " << cfg.num_pairs << " pong_actors" << endl;
       std::vector<actor> pong_actors;
       for (size_t i = 0; i < cfg.num_pairs; ++i) {
-        auto src = sys.spawn(pong_actor);
+        auto src = sys.spawn(pong_actor<std::vector<uint64_t>>);
         sys.registry().put(cfg.actor_atoms.at(i), src);
         pong_actors.emplace_back(std::move(src));
       }
