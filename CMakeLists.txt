@@ -126,4 +126,5 @@ macro(add_target name)
 endmacro()
 
 add_target(simple_streaming)
-add_target(simple_benchmark)
+add_target(pingpong)
+add_target(blank_streaming)
