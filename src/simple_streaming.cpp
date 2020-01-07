@@ -269,8 +269,11 @@ void net_run_sink(net::stream_socket first, net::stream_socket second,
     std::cerr << "done" << std::endl;
     std::cout << std::endl;
   });
+  std::cout << "stopping now!" << std::endl;
   // TODO: THIS IS A REALLY DIRTY HACK FOR BENCHING THE STACK PROPERLY.
-  abort();
+  // abort();
+  mm.stop();
+  std::cout << "stopped" << std::endl;
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
@@ -279,11 +282,11 @@ void caf_main(actor_system& sys, const config& cfg) {
       hdl = sys.spawn(stage) * hdl;
     return hdl;
   };
-  auto serializer = get_or(sys.config(), "middleman.serializing_workers",
+  /*auto serializer = get_or(sys.config(), "middleman.serializing_workers",
                            defaults::middleman::serializing_workers);
   auto deserializer = get_or(sys.config(), "middleman.workers",
                              defaults::middleman::workers);
-  cout << serializer << ", " << deserializer << ", ";
+  cout << serializer << ", " << deserializer << ", ";*/
   switch (static_cast<uint64_t>(cfg.mode)) {
     case local_bench_atom::uint_value(): {
       cerr << "run in 'localBench' mode" << endl;
@@ -344,6 +347,7 @@ void caf_main(actor_system& sys, const config& cfg) {
       };
       std::thread t{f};
       t.join();
+      std::cout << "joined" << std::endl;
       break;
     }
   }

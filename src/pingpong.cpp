@@ -56,7 +56,7 @@ struct tick_state {
   size_t tick_count = 0;
 
   void tick() {
-    cout << count << ", " << std::endl;
+    cout << count << ", ";
     count = 0;
   }
 };
@@ -64,11 +64,9 @@ struct tick_state {
 struct source_state : tick_state {};
 
 /// This actor will start a pingpong, answer any pong and print counts.
-/// Object is what should be sent.
-template <class Object>
 behavior ping_actor(stateful_actor<source_state>* self, actor sink,
-                    actor listener, size_t iterations, Object to_send) {
-  self->send(sink, to_send);
+                    actor listener, size_t iterations) {
+  self->send(sink, ping_atom::value);
   self->delayed_send(self, std::chrono::seconds(1), tick_atom::value);
   return {
     [=](tick_atom) {
@@ -79,17 +77,16 @@ behavior ping_actor(stateful_actor<source_state>* self, actor sink,
         self->send(listener, done_atom::value);
       }
     },
-    [=](Object& obj) {
+    [=](pong_atom) {
       self->state.count++;
-      return obj;
+      return ping_atom::value;
     },
   };
 }
 
 /// Object is what should be sent.
-template <class Object>
 behavior pong_actor(event_based_actor*) {
-  return {[](Object& obj) { return obj; }};
+  return {[](ping_atom) { return pong_atom::value; }};
 }
 
 struct config : actor_system_config {
@@ -177,8 +174,7 @@ void io_run_ping_actor(socket_pair sockets, size_t, size_t iterations) {
           std::cerr << "ERROR: could not get a handle to remote source\n";
           return;
         }
-        sys.spawn(ping_actor<std::vector<uint64_t>>, actor_cast<actor>(ptr),
-                  self, iterations, std::vector<uint64_t>(1000000));
+        sys.spawn(ping_actor, actor_cast<actor>(ptr), self, iterations);
       },
       [&](error& err) {
         std::cerr << "ERROR: " << sys.render(err) << std::endl;
@@ -214,27 +210,25 @@ void net_run_ping_actor(socket_pair sockets, size_t num_pairs,
       std::cerr << "got source: " << to_string(ptr).c_str() << " -> run"
                 << std::endl;
       pong_actors.emplace_back(
-        sys.spawn(ping_actor<std::vector<uint64_t>>, actor_cast<actor>(ptr),
-                  self, iterations, std::vector<uint64_t>(1000000)));
+        sys.spawn(ping_actor, actor_cast<actor>(ptr), self, iterations));
     });
   }
   size_t done_count = 0;
   while (done_count < num_pairs)
-    self->receive([&done_count](done_atom) {
-      ++done_count;
-      std::cout << "received done" << std::endl;
-    });
-  // TODO: THIS IS A REALLY DIRTY HACK FOR BENCHING THE STACK PROPERLY.
+    self->receive([&done_count](done_atom) { ++done_count; });
+  cout << endl;
   std::cout << "done" << std::endl;
-  abort();
+  backend.stop();
+  std::cout << "stopped" << std::endl;
+  // TODO: THIS IS A REALLY DIRTY HACK FOR BENCHING THE STACK PROPERLY.
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
-  auto serializer = get_or(sys.config(), "middleman.serializing_workers",
+  /*auto serializer = get_or(sys.config(), "middleman.serializing_workers",
                            defaults::middleman::serializing_workers);
   auto deserializer = get_or(sys.config(), "middleman.workers",
                              defaults::middleman::workers);
-  cout << serializer << ", " << deserializer << ", ";
+  cout << serializer << ", " << deserializer << ", ";*/
   switch (static_cast<uint64_t>(cfg.mode)) {
     case io_bench_atom::uint_value(): {
       cerr << "run in 'ioBench' mode" << std::endl;
@@ -247,7 +241,7 @@ void caf_main(actor_system& sys, const config& cfg) {
       }
       cerr << "sockets: " << sockets.first.id << ", " << sockets.second.id
            << endl;
-      auto src = sys.spawn(pong_actor<std::vector<uint64_t>>);
+      auto src = sys.spawn(pong_actor);
       using io::network::scribe_impl;
       auto& mm = sys.middleman();
       auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
@@ -277,19 +271,21 @@ void caf_main(actor_system& sys, const config& cfg) {
       cerr << "spawn " << cfg.num_pairs << " pong_actors" << endl;
       std::vector<actor> pong_actors;
       for (size_t i = 0; i < cfg.num_pairs; ++i) {
-        auto src = sys.spawn(pong_actor<std::vector<uint64_t>>);
+        auto src = sys.spawn(pong_actor);
         sys.registry().put(cfg.actor_atoms.at(i), src);
         pong_actors.emplace_back(std::move(src));
       }
       auto& mm = sys.network_manager();
       auto& backend = *dynamic_cast<net::backend::test*>(mm.backend("test"));
-      backend.emplace(make_node_id(cfg.mars_id), sockets.first, sockets.second);
+      auto ep_pair = backend.emplace(make_node_id(cfg.mars_id), sockets.first,
+                                     sockets.second);
       cerr << "spin up second actor sytem" << endl;
       auto f = [sockets, &cfg] {
         net_run_ping_actor(sockets, cfg.num_pairs, cfg.iterations);
       };
       thread t{f};
       t.join();
+      std::cout << "joined" << std::endl;
       for (auto& a : pong_actors)
         anon_send_exit(a, exit_reason::user_shutdown);
       break;

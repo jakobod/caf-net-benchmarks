@@ -225,11 +225,11 @@ void net_run_sink(net::stream_socket first, net::stream_socket second,
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
-  auto serializer = get_or(sys.config(), "middleman.serializing_workers",
+  /*auto serializer = get_or(sys.config(), "middleman.serializing_workers",
                            defaults::middleman::serializing_workers);
   auto deserializer = get_or(sys.config(), "middleman.workers",
                              defaults::middleman::workers);
-  cout << serializer << ", " << deserializer << ", ";
+  cout << serializer << ", " << deserializer << ", ";*/
   switch (static_cast<uint64_t>(cfg.mode)) {
     case io_bench_atom::uint_value(): {
       cerr << "run in 'ioBench' mode" << std::endl;
