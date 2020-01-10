@@ -17,7 +17,6 @@
  * http://www.boost.org/LICENSE_1_0.txt.                                      *
  ******************************************************************************/
 
-#include <cstring>
 #include <iostream>
 
 #include "caf/actor_system_config.hpp"
@@ -40,7 +39,10 @@ using namespace caf;
 
 namespace {
 
+using stream_socket_pair = std::pair<net::stream_socket, net::stream_socket>;
+
 using start_atom = atom_constant<atom("start")>;
+using stop_atom = atom_constant<atom("stop")>;
 using tick_atom = atom_constant<atom("tick")>;
 using done_atom = atom_constant<atom("done")>;
 using io_bench_atom = atom_constant<atom("ioBench")>;
@@ -71,13 +73,13 @@ behavior source(stateful_actor<source_state>* self, size_t iterations,
       if (self->state.tick_count++ >= iterations)
         self->quit();
     },
-    [=](start_atom, actor sink) {
+    [=](start_atom start, const actor& sink) {
       std::vector<uint64_t> data(data_size);
-      while (true) {
+      while (self->mailbox().empty())
         self->send(sink, data);
-        // std::this_thread::sleep_for(std::chrono::microseconds(1));
-      }
+      self->send(self, start, sink);
     },
+    [=](stop_atom) { self->quit(); },
   };
 }
 
@@ -86,8 +88,8 @@ struct sink_state : tick_state {
   uint64_t sequence = 0;
 };
 
-behavior sink(stateful_actor<sink_state>* self, actor src, actor listener,
-              size_t iterations) {
+behavior sink(stateful_actor<sink_state>* self, actor src,
+              const actor& listener, size_t iterations) {
   self->send(src, start_atom::value, self);
   self->delayed_send(self, std::chrono::seconds(1), tick_atom::value);
   return {
@@ -95,11 +97,12 @@ behavior sink(stateful_actor<sink_state>* self, actor src, actor listener,
       self->delayed_send(self, std::chrono::seconds(1), tick_atom::value);
       self->state.tick();
       if (self->state.tick_count++ >= iterations) {
+        self->send(src, stop_atom::value);
         self->send(listener, done_atom::value);
         self->quit();
       }
     },
-    [=](const std::vector<uint64_t>) { ++self->state.count; },
+    [=](const std::vector<uint64_t>&) { ++self->state.count; },
   };
 }
 
@@ -131,14 +134,13 @@ struct config : actor_system_config {
   size_t data_size = 1024;
 };
 
-expected<std::pair<net::stream_socket, net::stream_socket>>
-make_connected_tcp_socket_pair() {
+expected<stream_socket_pair> make_connected_tcp_socket_pair() {
   using namespace net;
-  net::tcp_accept_socket acceptor;
+  tcp_accept_socket acceptor;
   uri::authority_type auth;
   auth.port = 0;
   auth.host = "0.0.0.0"s;
-  if (auto res = net::make_tcp_accept_socket(auth, false))
+  if (auto res = make_tcp_accept_socket(auth, false))
     acceptor = *res;
   else
     return res.error();
@@ -180,19 +182,16 @@ void io_run_sink(net::stream_socket, net::stream_socket second,
     .receive(
       [&](node_id&, strong_actor_ptr& ptr, std::set<std::string>&) {
         if (ptr == nullptr) {
-          std::cerr << "ERROR: could not get a handle to remote source\n";
+          cerr << "ERROR: could not get a handle to remote source\n";
           return;
         }
         sys.spawn(sink, actor_cast<actor>(ptr), self, iterations);
       },
-      [&](error& err) {
-        std::cerr << "ERROR: " << sys.render(err) << std::endl;
-      });
+      [&](error& err) { cerr << "ERROR: " << sys.render(err) << endl; });
   self->receive([](done_atom) {});
 }
 
-void net_run_sink(net::stream_socket first, net::stream_socket second,
-                  size_t iterations) {
+void net_run_sink(stream_socket_pair sockets, size_t iterations) {
   auto mars_id = *make_uri("test://mars");
   auto earth_id = *make_uri("test://earth");
   actor_system_config cfg;
@@ -206,38 +205,32 @@ void net_run_sink(net::stream_socket first, net::stream_socket second,
   actor_system sys{cfg};
   auto& mm = sys.network_manager();
   auto& backend = *dynamic_cast<net::backend::test*>(mm.backend("test"));
-  backend.emplace(make_node_id(earth_id), second, first);
+  backend.emplace(make_node_id(earth_id), sockets.second, sockets.first);
   auto locator = *make_uri("test://earth/name/source");
   scoped_actor self{sys};
-  std::cerr << "resolve locator " << std::endl;
+  cerr << "resolve locator " << endl;
   mm.resolve(locator, self);
+  actor sink_actor;
   self->receive([&](strong_actor_ptr& ptr, const std::set<std::string>&) {
-    std::cerr << "got soure: " << to_string(ptr).c_str() << " -> run"
-              << std::endl;
-    sys.spawn(sink, actor_cast<actor>(ptr), self, iterations);
+    cerr << "got soure: " << to_string(ptr).c_str() << " -> run" << endl;
+    sink_actor = sys.spawn(sink, actor_cast<actor>(ptr), self, iterations);
   });
   self->receive([](done_atom) {
-    std::cerr << "done" << std::endl;
-    std::cout << std::endl;
+    cerr << "done" << endl;
+    cout << endl;
   });
-  // TODO: THIS IS A REALLY DIRTY HACK FOR BENCHING THE STACK PROPERLY.
-  abort();
+  anon_send_exit(sink_actor, exit_reason::user_shutdown);
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
-  /*auto serializer = get_or(sys.config(), "middleman.serializing_workers",
-                           defaults::middleman::serializing_workers);
-  auto deserializer = get_or(sys.config(), "middleman.workers",
-                             defaults::middleman::workers);
-  cout << serializer << ", " << deserializer << ", ";*/
   switch (static_cast<uint64_t>(cfg.mode)) {
     case io_bench_atom::uint_value(): {
-      cerr << "run in 'ioBench' mode" << std::endl;
+      cerr << "run in 'ioBench' mode" << endl;
       std::pair<net::stream_socket, net::stream_socket> sockets;
       if (auto res = make_connected_tcp_socket_pair()) {
         sockets = *res;
       } else {
-        std::cerr << "ERROR: socket creation failed" << std::endl;
+        cerr << "ERROR: socket creation failed" << endl;
         return;
       }
       cerr << "sockets: " << sockets.first.id << ", " << sockets.second.id
@@ -257,7 +250,7 @@ void caf_main(actor_system& sys, const config& cfg) {
       std::thread t{f};
       t.join();
       anon_send_exit(src, exit_reason::user_shutdown);
-      std::cout << std::endl;
+      cout << endl;
       break;
     }
     case net_bench_atom::uint_value(): {
@@ -270,7 +263,7 @@ void caf_main(actor_system& sys, const config& cfg) {
         return;
       }
       cerr << "sockets: " << sockets.first.id << ", " << sockets.second.id
-           << std::endl;
+           << endl;
       auto src = sys.spawn(source, cfg.iterations, cfg.data_size);
       sys.registry().put(atom("source"), src);
       auto& mm = sys.network_manager();
@@ -278,11 +271,10 @@ void caf_main(actor_system& sys, const config& cfg) {
       backend.emplace(make_node_id(cfg.mars_id), sockets.first, sockets.second);
       cerr << "spin up second actor sytem" << endl;
       auto iterations = cfg.iterations;
-      auto f = [sockets, iterations] {
-        net_run_sink(sockets.first, sockets.second, iterations);
-      };
+      auto f = [sockets, iterations] { net_run_sink(sockets, iterations); };
       std::thread t{f};
       t.join();
+      anon_send_exit(src, exit_reason::user_shutdown);
       break;
     }
   }

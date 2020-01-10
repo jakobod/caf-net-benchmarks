@@ -17,7 +17,6 @@
  * http://www.boost.org/LICENSE_1_0.txt.                                      *
  ******************************************************************************/
 
-#include <cstring>
 #include <iostream>
 
 #include "caf/actor_system_config.hpp"
@@ -260,20 +259,19 @@ void net_run_sink(net::stream_socket first, net::stream_socket second,
   scoped_actor self{sys};
   std::cerr << "resolve locator " << std::endl;
   mm.resolve(locator, self);
+  actor sink_actor;
   self->receive([&](strong_actor_ptr& ptr, const std::set<std::string>&) {
     std::cerr << "got soure: " << to_string(ptr).c_str() << " -> run"
               << std::endl;
-    sys.spawn(sink, actor_cast<actor>(ptr), self, iterations);
+    sink_actor = sys.spawn(sink, actor_cast<actor>(ptr), self, iterations);
   });
   self->receive([](done_atom) {
     std::cerr << "done" << std::endl;
     std::cout << std::endl;
   });
   std::cout << "stopping now!" << std::endl;
-  // TODO: THIS IS A REALLY DIRTY HACK FOR BENCHING THE STACK PROPERLY.
-  // abort();
-  mm.stop();
-  std::cout << "stopped" << std::endl;
+  anon_send_exit(sink_actor, exit_reason::user_shutdown);
+  std::cout << "END OF thread" << std::endl;
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
@@ -347,7 +345,7 @@ void caf_main(actor_system& sys, const config& cfg) {
       };
       std::thread t{f};
       t.join();
-      std::cout << "joined" << std::endl;
+      anon_send_exit(src, exit_reason::user_shutdown);
       break;
     }
   }
