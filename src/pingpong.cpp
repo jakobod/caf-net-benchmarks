@@ -17,6 +17,7 @@
  * http://www.boost.org/LICENSE_1_0.txt.                                      *
  ******************************************************************************/
 
+#include <chrono>
 #include <iostream>
 
 #include "caf/actor_system_config.hpp"
@@ -36,6 +37,7 @@
 
 using namespace std;
 using namespace caf;
+using namespace std::chrono;
 
 namespace {
 
@@ -52,34 +54,41 @@ using local_bench_atom = atom_constant<atom("localBench")>;
 using socket_pair = pair<net::stream_socket, net::stream_socket>;
 
 struct tick_state {
+  tick_state() {
+    send_ts_.reserve(10000);
+  }
+
   size_t count = 0;
   size_t tick_count = 0;
+  std::vector<microseconds> send_ts_;
 
   void tick() {
-    cout << count << ", ";
+    cerr << count << ", ";
     count = 0;
+  }
+
+  void timestamp() {
+    send_ts_.emplace_back(
+      duration_cast<microseconds>(system_clock::now().time_since_epoch()));
   }
 };
 
-struct source_state : tick_state {};
-
 /// This actor will start a pingpong, answer any pong and print counts.
-behavior ping_actor(stateful_actor<source_state>* self, actor sink,
+behavior ping_actor(stateful_actor<tick_state>* self, actor sink,
                     actor listener, size_t iterations) {
-  self->send(sink, ping_atom::value);
-  self->delayed_send(self, std::chrono::seconds(1), tick_atom::value);
   return {
     [=](tick_atom) {
       self->delayed_send(self, std::chrono::seconds(1), tick_atom::value);
       self->state.tick();
       if (self->state.tick_count++ >= iterations) {
         self->quit();
-        self->send(listener, done_atom::value);
+        self->send(listener, done_atom::value, std::move(self->state.send_ts_));
       }
     },
     [=](pong_atom) {
+      self->state.timestamp();
       self->state.count++;
-      return ping_atom::value;
+      self->send(sink, ping_atom::value);
     },
   };
 }
@@ -151,6 +160,22 @@ make_connected_tcp_socket_pair() {
     return res.error();
 }
 
+template <class T>
+void print_vector(string name, const std::vector<T>& vec) {
+  cout << name << ": ";
+  for (const auto& v : vec) {
+    auto val = v.count();
+    // auto val = v.count() - vec.begin()->count();
+    cout << val << ", ";
+  }
+  cout << endl;
+}
+
+template <class T>
+void erase(std::vector<T>& vec, size_t begin, size_t end) {
+  vec.erase(vec.begin() + begin, vec.begin() + end);
+}
+
 void io_run_ping_actor(socket_pair sockets, size_t, size_t iterations) {
   actor_system_config cfg;
   cfg.add_message_type<uint64_t>("uint64_t");
@@ -174,12 +199,15 @@ void io_run_ping_actor(socket_pair sockets, size_t, size_t iterations) {
           std::cerr << "ERROR: could not get a handle to remote source\n";
           return;
         }
-        sys.spawn(ping_actor, actor_cast<actor>(ptr), self, iterations);
+        auto act = sys.spawn(ping_actor, actor_cast<actor>(ptr), self,
+                             iterations);
+        anon_send(act, pong_atom::value);
+        delayed_anon_send(act, seconds(1), tick_atom::value);
       },
       [&](error& err) {
         std::cerr << "ERROR: " << sys.render(err) << std::endl;
       });
-  self->receive([](done_atom) {});
+  self->receive([](done_atom, std::vector<microseconds>) {});
 }
 
 void net_run_ping_actor(socket_pair sockets, size_t num_pairs,
@@ -197,30 +225,65 @@ void net_run_ping_actor(socket_pair sockets, size_t num_pairs,
   actor_system sys{cfg};
   auto& mm = sys.network_manager();
   auto& backend = *dynamic_cast<net::backend::test*>(mm.backend("test"));
-  backend.emplace(make_node_id(earth_id), sockets.second, sockets.first);
+  auto& ep_pair = backend.emplace(make_node_id(earth_id), sockets.second,
+                                  sockets.first);
+  auto& ep_manager = ep_pair.second;
+  auto timestamps = ep_manager->get_timestamps();
   scoped_actor self{sys};
   for (size_t i = 0; i < num_pairs; ++i) {
     auto locator = *make_uri("test://earth/name/actor" + to_string(i));
     cerr << "resolve locator: " << to_string(locator) << endl;
     mm.resolve(locator, self);
   }
-  std::vector<actor> pong_actors;
+  std::vector<actor> ping_actors;
   for (size_t i = 0; i < num_pairs; ++i) {
     self->receive([&](strong_actor_ptr& ptr, const std::set<std::string>&) {
       std::cerr << "got source: " << to_string(ptr).c_str() << " -> run"
                 << std::endl;
-      pong_actors.emplace_back(
+      ping_actors.emplace_back(
         sys.spawn(ping_actor, actor_cast<actor>(ptr), self, iterations));
     });
   }
-  size_t done_count = 0;
-  while (done_count < num_pairs)
-    self->receive([&done_count](done_atom) { ++done_count; });
-  cout << endl;
-  std::cout << "done" << std::endl;
-  backend.stop();
-  std::cout << "stopped" << std::endl;
-  // TODO: THIS IS A REALLY DIRTY HACK FOR BENCHING THE STACK PROPERLY.
+  this_thread::sleep_for(seconds(1));
+  timestamps.enqueue_ts.clear();
+  timestamps.write_event_ts.clear();
+  timestamps.write_packet_ts.clear();
+  timestamps.write_some_ts.clear();
+  anon_send(*ping_actors.begin(), pong_atom::value);
+  delayed_anon_send(*ping_actors.begin(), seconds(1), tick_atom::value);
+  std::vector<microseconds> send_ts;
+  self->receive([&send_ts](done_atom, std::vector<microseconds> ts) {
+    send_ts = std::move(ts);
+  });
+  cerr << endl;
+
+  print_vector("send_ts        ", send_ts);
+  print_vector("enqueue_ts     ", timestamps.enqueue_ts);
+  print_vector("write_event_ts ", timestamps.write_event_ts);
+  print_vector("write_packet_ts", timestamps.write_packet_ts);
+  print_vector("write_some_ts  ", timestamps.write_some_ts);
+  /*
+    erase(timestamps.write_event_ts, 0, 3);
+    erase(timestamps.write_packet_ts, 0, 3);
+    erase(timestamps.write_some_ts, 0, 3);
+
+    auto min_len = min({send_ts.size(), timestamps.enqueue_ts.size(),
+                        timestamps.write_event_ts.size(),
+                        timestamps.write_packet_ts.size(),
+                        timestamps.write_some_ts.size()});
+    auto max_len = max({send_ts.size(), timestamps.enqueue_ts.size(),
+                        timestamps.write_event_ts.size(),
+                        timestamps.write_packet_ts.size(),
+                        timestamps.write_some_ts.size()});
+    cout << "min_len: " << min_len << endl;
+    cout << "max_len: " << max_len << endl;
+
+    send_ts.resize(min_len);
+    timestamps.enqueue_ts.resize(min_len);
+    timestamps.write_event_ts.resize(min_len);
+    timestamps.write_packet_ts.resize(min_len);
+    timestamps.write_some_ts.resize(min_len);
+  */
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
@@ -255,7 +318,7 @@ void caf_main(actor_system& sys, const config& cfg) {
       std::thread t{f};
       t.join();
       anon_send_exit(src, exit_reason::user_shutdown);
-      std::cout << std::endl;
+      cout << std::endl;
       break;
     }
     case net_bench_atom::uint_value(): {
@@ -285,7 +348,7 @@ void caf_main(actor_system& sys, const config& cfg) {
       };
       thread t{f};
       t.join();
-      std::cout << "joined" << std::endl;
+      cerr << "joined" << std::endl;
       for (auto& a : pong_actors)
         anon_send_exit(a, exit_reason::user_shutdown);
       break;
