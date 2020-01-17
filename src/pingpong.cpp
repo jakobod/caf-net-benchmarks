@@ -5,8 +5,8 @@
  *                     | |___ / ___ \|  _|      Framework                     *
  *                      \____/_/   \_|_|                                      *
  *                                                                            *
- * Copyright (C) 2011 - 2017                                                  *
- * Dominik Charousset <dominik.charousset (at) haw-hamburg.de>                *
+ * Copyright (C) 2011 - 2019                                                  *
+ * Jakob Otto <jakob.otto (at) haw-hamburg.de>                                *
  *                                                                            *
  * Distributed under the terms and conditions of the BSD 3-Clause License or  *
  * (at your option) under the terms and conditions of the Boost Software      *
@@ -31,8 +31,6 @@
 #include "caf/net/defaults.hpp"
 #include "caf/net/middleman.hpp"
 #include "caf/net/stream_socket.hpp"
-#include "caf/net/tcp_accept_socket.hpp"
-#include "caf/net/tcp_stream_socket.hpp"
 #include "caf/uri.hpp"
 #include "utility.hpp"
 
@@ -53,27 +51,17 @@ using net_bench_atom = atom_constant<atom("netBench")>;
 using local_bench_atom = atom_constant<atom("localBench")>;
 
 struct tick_state {
-  tick_state() {
-    send_ts_.reserve(10000);
-  }
-
   void tick() {
     cerr << count << ", ";
     count = 0;
   }
 
-  void timestamp() {
-    send_ts_.emplace_back(
-      duration_cast<microseconds>(system_clock::now().time_since_epoch()));
-  }
-
   size_t count = 0;
   size_t tick_count = 0;
-  vector<microseconds> send_ts_;
 };
 
 behavior ping_actor(stateful_actor<tick_state>* self, actor sink,
-                    actor listener, size_t iterations) {
+                    size_t iterations) {
   return {
     [=](tick_atom) {
       self->delayed_send(self, seconds(1), tick_atom::value);
@@ -81,18 +69,15 @@ behavior ping_actor(stateful_actor<tick_state>* self, actor sink,
       if (self->state.tick_count++ >= iterations) {
         self->send_exit(sink, exit_reason::user_shutdown);
         self->quit();
-        self->send(listener, done_atom::value, move(self->state.send_ts_));
       }
     },
     [=](start_atom) {
-      self->state.timestamp();
       self->delayed_send(self, seconds(1), tick_atom::value);
       self->send(sink, ping_atom::value);
     },
     [=](pong_atom) {
-      self->state.timestamp();
       self->state.count++;
-      self->send(sink, ping_atom::value);
+      return ping_atom::value;
     },
   };
 }
@@ -149,12 +134,10 @@ void io_run_ping_actor(socket_pair sockets, size_t iterations) {
           cerr << "ERROR: could not get a handle to remote source\n";
           return;
         }
-        auto act = sys.spawn(ping_actor, actor_cast<actor>(ptr), self,
-                             iterations);
+        auto act = sys.spawn(ping_actor, actor_cast<actor>(ptr), iterations);
         anon_send(act, start_atom::value);
       },
       [&](error& err) { cerr << "ERROR: " << sys.render(err) << endl; });
-  self->receive([](done_atom, const vector<microseconds>&) {});
 }
 
 void net_run_ping_actor(socket_pair sockets, size_t iterations) {
@@ -171,41 +154,17 @@ void net_run_ping_actor(socket_pair sockets, size_t iterations) {
   actor_system sys{cfg};
   auto& mm = sys.network_manager();
   auto& backend = *dynamic_cast<net::backend::test*>(mm.backend("test"));
-  auto& ep_pair = backend.emplace(make_node_id(earth_id), sockets.second,
-                                  sockets.first);
-  auto& ep_manager = ep_pair.second;
-  auto timestamps = ep_manager->get_timestamps();
+  backend.emplace(make_node_id(earth_id), sockets.second, sockets.first);
   scoped_actor self{sys};
   auto locator = *make_uri("test://earth/name/source");
   mm.resolve(locator, self);
   actor ping;
   self->receive([&](strong_actor_ptr& ptr, const set<string>&) {
     cerr << "got source: " << to_string(ptr).c_str() << " -> run" << endl;
-    ping = sys.spawn(ping_actor, actor_cast<actor>(ptr), self, iterations);
+    ping = sys.spawn(ping_actor, actor_cast<actor>(ptr), iterations);
   });
-  // Clear all timestamps due to initialization
-  this_thread::sleep_for(seconds(1));
-  timestamps.enqueue_ts.clear();
-  timestamps.write_event_ts.clear();
-  timestamps.write_packet_ts.clear();
-  timestamps.write_some_ts.clear();
   // Start ping_pong
   anon_send(ping, start_atom::value);
-  vector<microseconds> send_ts;
-  self->receive(
-    [&send_ts](done_atom, vector<microseconds> ts) { send_ts = move(ts); });
-  cerr << endl;
-  // strip `down_message` from timestamps
-  timestamps.write_event_ts.resize(timestamps.write_event_ts.size() - 1);
-  timestamps.write_packet_ts.resize(timestamps.write_packet_ts.size() - 1);
-  timestamps.write_some_ts.resize(timestamps.write_some_ts.size() - 1);
-  // Print results
-  cout << "write:" << endl;
-  print_vector("send_ts        ", send_ts);
-  print_vector("enqueue_ts     ", timestamps.enqueue_ts);
-  print_vector("write_event_ts ", timestamps.write_event_ts);
-  print_vector("write_packet_ts", timestamps.write_packet_ts);
-  print_vector("write_some_ts  ", timestamps.write_some_ts);
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
