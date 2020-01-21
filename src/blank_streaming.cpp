@@ -75,7 +75,7 @@ behavior source(stateful_actor<source_state>* self, size_t iterations,
     },
     [=](start_atom start, const actor& sink) {
       std::vector<uint64_t> data(data_size);
-      while (self->mailbox().empty())
+      for(int i = 0; i < 100; ++i)
         self->send(sink, data);
       self->send(self, start, sink);
     },

@@ -35,7 +35,6 @@ void print_vector(const std::string& name, const std::vector<T>& vec) {
   cout << name << ": ";
   for (const auto& v : vec) {
     auto val = v.count();
-    // auto val = v.count() - vec.begin()->count();
     cout << val << ", ";
   }
   cout << endl;
