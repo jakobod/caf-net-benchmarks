@@ -5,7 +5,7 @@
  *                     | |___ / ___ \|  _|      Framework                     *
  *                      \____/_/   \_|_|                                      *
  *                                                                            *
- * Copyright 2011-2020 Jakob Otto                                             *
+ * Copyright 2011-2019 Jakob Otto                                             *
  *                                                                            *
  * Distributed under the terms and conditions of the BSD 3-Clause License or  *
  * (at your option) under the terms and conditions of the Boost Software      *
@@ -18,31 +18,25 @@
 
 #pragma once
 
-#include <iostream>
-#include <string>
-#include <vector>
-
 #include "caf/byte.hpp"
 #include "caf/error.hpp"
-#include "caf/net/fwd.hpp"
 
-using socket_pair = std::pair<caf::net::stream_socket, caf::net::stream_socket>;
+class dummy_application_factory {
+public:
+  using application_type = dummy_application;
 
-caf::expected<std::pair<caf::net::stream_socket, caf::net::stream_socket>>
-make_connected_tcp_socket_pair();
-
-template <class T>
-void print_vector(const std::string& name, const std::vector<T>& vec) {
-  using namespace std;
-  cout << name << ": ";
-  for (const auto& v : vec) {
-    auto val = v.count();
-    cout << val << ", ";
+  static caf::error serialize(caf::actor_system& sys,
+                              const caf::type_erased_tuple& x,
+                              std::vector<caf::byte>& buf) {
+    return dummy_application::serialize(sys, x, buf);
   }
-  cout << endl;
-}
 
-template <class T>
-void erase(std::vector<T>& vec, size_t begin, size_t end) {
-  vec.erase(vec.begin() + begin, vec.begin() + end);
-}
+  template <class Parent>
+  caf::error init(Parent&) {
+    return caf::none;
+  }
+
+  application_type make() const {
+    return dummy_application{};
+  }
+};
