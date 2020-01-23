@@ -5,7 +5,7 @@
  *                     | |___ / ___ \|  _|      Framework                     *
  *                      \____/_/   \_|_|                                      *
  *                                                                            *
- * Copyright 2011-2019 Dominik Charousset                                     *
+ * Copyright 2011-2020 Jakob Otto                                             *
  *                                                                            *
  * Distributed under the terms and conditions of the BSD 3-Clause License or  *
  * (at your option) under the terms and conditions of the Boost Software      *
@@ -22,6 +22,8 @@
 #include <string>
 #include <vector>
 
+#include "caf/byte.hpp"
+#include "caf/error.hpp"
 #include "caf/net/fwd.hpp"
 
 using socket_pair = std::pair<caf::net::stream_socket, caf::net::stream_socket>;
