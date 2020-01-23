@@ -20,6 +20,7 @@
 
 #include "caf/byte.hpp"
 #include "caf/error.hpp"
+#include "dummy_application.hpp"
 
 class dummy_application_factory {
 public:

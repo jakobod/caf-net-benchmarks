@@ -121,7 +121,7 @@ mark_as_advanced(CAF_ROOT_DIR
                  CAF_INCLUDE_DIRS)
 
 if (CAF_core_FOUND AND NOT TARGET caf::core)
-    add_library(caf::core UNKNOWN IMPORTED ../src/multiple_host_streaming.cpp ../header/dummy_application_factory.hpp)
+    add_library(caf::core UNKNOWN IMPORTED ../src/streaming_server.cpp ../header/dummy_application_factory.hpp)
     set_target_properties(caf::core PROPERTIES
                           IMPORTED_LOCATION "${CAF_LIBRARY_CORE}"
                           INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_CORE}")
