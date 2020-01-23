@@ -23,6 +23,7 @@
 #include "caf/all.hpp"
 #include "caf/io/all.hpp"
 #include "caf/io/network/default_multiplexer.hpp"
+#include "caf/io/network/scribe_impl.hpp"
 #include "caf/io/scribe.hpp"
 #include "caf/net/backend/test.hpp"
 #include "caf/net/defaults.hpp"
@@ -33,7 +34,6 @@
 #include "caf/net/tcp_accept_socket.hpp"
 #include "caf/net/tcp_stream_socket.hpp"
 #include "caf/uri.hpp"
-#include "dummy_application_factory.hpp"
 
 using namespace std;
 using namespace caf;
@@ -41,7 +41,6 @@ using namespace caf;
 namespace {
 
 using start_atom = atom_constant<atom("start")>;
-using tick_atom = atom_constant<atom("tick")>;
 using done_atom = atom_constant<atom("done")>;
 using io_bench_atom = atom_constant<atom("ioBench")>;
 using net_bench_atom = atom_constant<atom("netBench")>;
@@ -95,7 +94,7 @@ struct config : actor_system_config {
   }
 
   std::string host = "localhost";
-  uint16_t port = 0;
+  uint16_t port = 8080;
   int num_stages = 0;
   size_t iterations = 10;
   atom_value mode;
@@ -103,27 +102,53 @@ struct config : actor_system_config {
   uri mars_id;
 };
 
+net::socket_guard<net::tcp_stream_socket> accept(uint16_t port) {
+  uri::authority_type auth;
+  auth.port = port;
+  auth.host = "0.0.0.0"s;
+  auto acceptor = *net::make_tcp_accept_socket(auth, false);
+  port = *local_port(net::socket_cast<net::network_socket>(acceptor));
+  auto acceptor_guard = net::make_socket_guard(acceptor);
+  cout << "opened acceptor on port " << port << endl;
+  return net::make_socket_guard(*net::accept(acceptor));
+}
+
+void run_io_server(actor_system& sys, const config& cfg) {
+  auto sock = accept(cfg.port);
+  auto src = sys.spawn(source);
+  using io::network::scribe_impl;
+  auto& mm = sys.middleman();
+  auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
+  io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, sock.release().id);
+  auto bb = mm.named_broker<io::basp_broker>(atom("BASP"));
+  anon_send(bb, publish_atom::value, move(scribe), uint16_t{8080},
+            actor_cast<strong_actor_ptr>(src), set<string>{});
+}
+
 void run_net_server(actor_system& sys, const config& cfg) {
   using namespace caf::net;
-  uri::authority_type auth;
-  auth.port = 0;
-  auth.host = "0.0.0.0"s;
-  auto acceptor = *make_tcp_accept_socket(auth, false);
-  auto port = *local_port(socket_cast<network_socket>(acceptor));
-  auto acceptor_guard = make_socket_guard(acceptor);
-  cout << "opened acceptor on port " << port << endl;
-  auto accepted = make_socket_guard(*accept(acceptor));
-  cout << "accepted" << endl;
+  auto sock = accept(cfg.port);
   scoped_actor self{sys};
   auto src = sys.spawn(source);
   sys.registry().put(atom("source"), src);
   auto& mm = sys.network_manager();
   auto& backend = *dynamic_cast<net::backend::test*>(mm.backend("test"));
-  backend.emplace(make_node_id(cfg.mars_id), {}, accepted.release());
+  backend.emplace(make_node_id(cfg.mars_id), {}, sock.release());
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
+  auto workers = get_or(sys.config(), "middleman.serializing_workers",
+                        defaults::middleman::serializing_workers);
+  cerr << "using " << workers << " workers for serializing";
+  workers = get_or(sys.config(), "middleman.workers",
+                   defaults::middleman::workers);
+  cerr << "using " << workers << " workers for deserializing" << endl;
   switch (static_cast<uint64_t>(cfg.mode)) {
+    case io_bench_atom::uint_value(): {
+      cerr << "run in 'ioBench' server mode " << endl;
+      run_io_server(sys, cfg);
+      break;
+    }
     case net_bench_atom::uint_value(): {
       cerr << "run in 'netBench' server mode " << endl;
       run_net_server(sys, cfg);
