@@ -24,14 +24,12 @@
 #include "caf/io/all.hpp"
 #include "caf/io/network/default_multiplexer.hpp"
 #include "caf/io/network/scribe_impl.hpp"
-#include "caf/io/scribe.hpp"
 #include "caf/net/backend/test.hpp"
 #include "caf/net/defaults.hpp"
+#include "caf/net/doorman.hpp"
 #include "caf/net/middleman.hpp"
-#include "caf/net/multiplexer.hpp"
 #include "caf/net/socket_guard.hpp"
 #include "caf/net/stream_socket.hpp"
-#include "caf/net/tcp_accept_socket.hpp"
 #include "caf/net/tcp_stream_socket.hpp"
 #include "caf/uri.hpp"
 
@@ -41,34 +39,50 @@ using namespace caf;
 namespace {
 
 using start_atom = atom_constant<atom("start")>;
+using tick_atom = atom_constant<atom("tick")>;
 using done_atom = atom_constant<atom("done")>;
 using io_bench_atom = atom_constant<atom("ioBench")>;
 using net_bench_atom = atom_constant<atom("netBench")>;
 using local_bench_atom = atom_constant<atom("localBench")>;
 
-struct source_state {
-  uint64_t current = 0;
+struct sink_state {
+  const char* name = "sink";
+  size_t tick_count = 0;
+  size_t count = 0;
+
+  void tick() {
+    cout << count << ", ";
+    count = 0;
+  }
 };
 
-behavior source(stateful_actor<source_state>* self) {
-  using namespace std::chrono;
+behavior sink(stateful_actor<sink_state>* self, actor src, size_t iterations) {
+  self->send(self * src, start_atom::value);
+  self->send(self, tick_atom::value);
   return {
-    [=](done_atom) { self->quit(); },
-    [=](start_atom) {
-      cerr << "START from: " << to_string(self->current_sender()).c_str()
-           << endl;
-      return self->make_source(
+    [=](tick_atom) {
+      self->delayed_send(self, chrono::seconds(1), tick_atom::value);
+      self->state.tick();
+      if (self->state.tick_count++ >= iterations) {
+        self->send(src, done_atom::value);
+        cout << endl;
+        self->quit();
+      }
+    },
+    [=](const stream<std::vector<uint64_t>>& in) {
+      return self->make_sink(
+        // input stream
+        in,
         // initialize state
-        [&](unit_t&) {
+        [](unit_t&) {
           // nop
         },
-        // get next element
-        [=](unit_t&, downstream<uint64_t>& out, size_t num) {
-          for (size_t i = 0; i < num; ++i)
-            out.push(self->state.current++);
-        },
-        // check whether we reached the end
-        [=](const unit_t&) { return false; });
+        // processing step
+        [=](unit_t&, std::vector<uint64_t>) { ++self->state.count; },
+        // cleanup
+        [](unit_t&) {
+          // nop
+        });
     },
   };
 }
@@ -79,79 +93,89 @@ struct config : actor_system_config {
       .add(mode, "mode,m", "one of 'local', 'ioBench', or 'netBench'")
       .add(host, "host,H", "host to connect to")
       .add(port, "port,p", "port to connect to")
-      .add(num_stages, "num-stages,n",
-           "number of stages after source / before sink")
       .add(iterations, "iterations,i",
-           "number of iterations that should be run");
+           "number of iterations that should be run")
+      .add(data_size, "data-size,d", "size of messages to send");
 
-    add_message_type<uint64_t>("uint64_t");
+    add_message_type<std::vector<uint64_t>>("std::vector<uint64_t>");
     earth_id = *make_uri("test://earth");
     mars_id = *make_uri("test://mars");
     load<net::middleman, net::backend::test>();
     set("logger.file-verbosity", atom("trace"));
     set("logger.file-name", "source.log");
-    put(content, "middleman.this-node", earth_id);
+    put(content, "middleman.this-node", mars_id);
   }
 
   std::string host = "localhost";
   uint16_t port = 8080;
-  int num_stages = 0;
   size_t iterations = 10;
-  atom_value mode;
+  size_t data_size = 1;
+  atom_value mode = net_bench_atom::value;
   uri earth_id;
   uri mars_id;
 };
 
-net::socket_guard<net::tcp_stream_socket> accept(uint16_t port) {
-  uri::authority_type auth;
-  auth.port = port;
-  auth.host = "0.0.0.0"s;
-  auto acceptor = *net::make_tcp_accept_socket(auth, false);
-  port = *local_port(net::socket_cast<net::network_socket>(acceptor));
-  auto acceptor_guard = net::make_socket_guard(acceptor);
-  cout << "opened acceptor on port " << port << endl;
-  return net::make_socket_guard(*net::accept(acceptor));
+net::socket_guard<net::tcp_stream_socket> connect(const std::string& host,
+                                                  uint16_t port) {
+  uri::authority_type dst;
+  dst.port = port;
+  dst.host = host;
+  cout << "connecting to " << to_string(dst) << endl;
+  return make_socket_guard(*net::make_connected_tcp_stream_socket(dst));
 }
 
-void run_io_server(actor_system& sys, const config& cfg) {
-  auto sock = accept(cfg.port);
-  auto src = sys.spawn(source);
+void run_io_client(actor_system& sys, const config& cfg) {
   using io::network::scribe_impl;
+  auto sock = connect(cfg.host, cfg.port);
   auto& mm = sys.middleman();
   auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
   io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, sock.release().id);
   auto bb = mm.named_broker<io::basp_broker>(atom("BASP"));
-  anon_send(bb, publish_atom::value, move(scribe), uint16_t{8080},
-            actor_cast<strong_actor_ptr>(src), set<string>{});
+  scoped_actor self{sys};
+  self->request(bb, infinite, connect_atom::value, move(scribe), uint16_t{8080})
+    .receive(
+      [&](node_id&, strong_actor_ptr& ptr, set<string>&) {
+        if (ptr == nullptr) {
+          cerr << "ERROR: could not get a handle to remote source\n";
+          return;
+        }
+        sys.spawn(sink, actor_cast<actor>(ptr), cfg.iterations);
+      },
+      [&](error& err) { cerr << "ERROR: " << sys.render(err) << endl; });
 }
 
-void run_net_server(actor_system& sys, const config& cfg) {
+void run_net_client(actor_system& sys, const config& cfg) {
   using namespace caf::net;
-  auto sock = accept(cfg.port);
-  scoped_actor self{sys};
-  auto src = sys.spawn(source);
-  sys.registry().put(atom("source"), src);
+  auto sock = connect(cfg.host, cfg.port);
   auto& mm = sys.network_manager();
   auto& backend = *dynamic_cast<net::backend::test*>(mm.backend("test"));
-  backend.emplace(make_node_id(cfg.mars_id), {}, sock.release());
+  backend.emplace(make_node_id(cfg.earth_id), {}, sock.release());
+  auto locator = *make_uri("test://earth/name/source");
+  scoped_actor self{sys};
+  cerr << "resolve locator " << endl;
+  mm.resolve(locator, self);
+  actor sink_actor;
+  self->receive([&](strong_actor_ptr& ptr, const set<string>&) {
+    cerr << "got soure: " << to_string(ptr).c_str() << " -> run" << endl;
+    sink_actor = sys.spawn(sink, actor_cast<actor>(ptr), cfg.iterations);
+  });
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
-  auto workers = get_or(sys.config(), "middleman.serializing_workers",
-                        defaults::middleman::serializing_workers);
-  cerr << "using " << workers << " workers for serializing";
-  workers = get_or(sys.config(), "middleman.workers",
-                   defaults::middleman::workers);
-  cerr << "using " << workers << " workers for deserializing" << endl;
+  auto serializer = get_or(sys.config(), "middleman.serializing_workers",
+                           defaults::middleman::serializing_workers);
+  auto deserializer = get_or(sys.config(), "middleman.workers",
+                             defaults::middleman::workers);
+  cout << serializer << ", " << deserializer << ", " << cfg.data_size;
   switch (static_cast<uint64_t>(cfg.mode)) {
     case io_bench_atom::uint_value(): {
-      cerr << "run in 'ioBench' server mode " << endl;
-      run_io_server(sys, cfg);
+      cerr << "run in 'ioBench' client mode " << endl;
+      run_io_client(sys, cfg);
       break;
     }
     case net_bench_atom::uint_value(): {
-      cerr << "run in 'netBench' server mode " << endl;
-      run_net_server(sys, cfg);
+      cerr << "run in 'netBench' client mode " << endl;
+      run_net_client(sys, cfg);
       break;
     }
     default:
