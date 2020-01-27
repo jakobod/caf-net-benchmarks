@@ -176,7 +176,7 @@ void caf_main(actor_system& sys, const config& cfg) {
                            defaults::middleman::serializing_workers);
   auto deserializer = get_or(sys.config(), "middleman.workers",
                              defaults::middleman::workers);
-  cout << serializer << ", " << deserializer << ", " << cfg.data_size;
+  cout << serializer << ", " << deserializer << ", " << cfg.data_size << ", ";
   switch (static_cast<uint64_t>(cfg.mode)) {
     case io_bench_atom::uint_value(): {
       cerr << "run in 'ioBench' client mode " << endl;
