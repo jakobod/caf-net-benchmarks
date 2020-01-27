@@ -11,11 +11,12 @@ function update_caf_application_ini() {
   echo [middleman] > $file
   echo "serializing_workers=$1" >> $file
   echo "workers=$2" >> $file
-  
-  remote_file="/home/otto/caf-net-benchmarks/$file"
+ 
+  echo SSH
+  remote_file="/users/otto/caf-net-benchmarks/$file"
   ssh mobi3 "echo [middleman] > $remote_file"
-  ssh mobi3 "echo "serializing_workers=$1" >> $remote_file"
-  ssh mobi3 "echo "workers=$2" >> $remote_file "
+  ssh mobi3 "echo serializing_workers=$1 >> $remote_file"
+  ssh mobi3 "echo workers=$2 >> $remote_file "
 }
 
 function init_file() {
@@ -34,18 +35,20 @@ function benchmark() {
   sleep 2
 }
 
-for i in {0..4}; do
+# -- netBenchmark -------------------------------------------------------------
+
+for i in 0 1 2 4 8; do
   file_name="${output_folder}/net-${i}-0"
   init_file ${file_name}
   for size in 1 10 100 1000 10000; do
-    update_caf_application_ini ${i} 0
     echo "netBench-${size}-${i}-0:"
+    update_caf_application_ini ${i} 0
     benchmark netBench 11 ${mobi3} ${size} ${file_name}
     echo
   done;
 done;
 
-for i in {0..4}; do
+for i in 1 2 4 8; do
   file_name="${output_folder}/net-0-${i}"
   init_file ${file_name}
   for size in 1 10 100 1000 10000; do
@@ -56,8 +59,8 @@ for i in {0..4}; do
   done;
 done;
 
-for i in {0..4}; do
-  file_name="${output_folder}/net-0-${i}"
+for i in 0 1 2 4 8; do
+  file_name="${output_folder}/net-4-${i}"
   init_file ${file_name}
   for size in 1 10 100 1000 10000; do
     echo "netBench-${size}-4-${i}:"
@@ -68,13 +71,59 @@ for i in {0..4}; do
 done;
 
 
-for i in {0..4}; do
+for i in 0 1 2 8; do
   file_name="${output_folder}/net-${i}-4"
   init_file ${file_name}
   for size in 1 10 100 1000 10000; do
     echo "netBench-${size}-${i}-4:"
     update_caf_application_ini ${i} 4
     benchmark netBench 11 ${mobi3} ${size} ${file_name}
+    echo
+  done;
+done;
+
+# -- IO benchmark -------------------------------------------------------------
+for i in 0 1 2 4 8; do
+  file_name="${output_folder}/io-${i}-0"
+  init_file ${file_name}
+  for size in 1 10 100 1000 10000; do
+    echo "ioBench-${size}-${i}-0:"
+    update_caf_application_ini ${i} 0
+    benchmark ioBench 11 ${mobi3} ${size} ${file_name}
+    echo
+  done;
+done;
+
+for i in 1 2 4 8; do
+  file_name="${output_folder}/io-0-${i}"
+  init_file ${file_name}
+  for size in 1 10 100 1000 10000; do
+    echo "ioBench-${size}-0-${i}:"
+    update_caf_application_ini 0 ${i}
+    benchmark ioBench 11 ${mobi3} ${size} ${file_name}
+    echo
+  done;
+done;
+
+for i in 0 1 2 4 8; do
+  file_name="${output_folder}/io-4-${i}"
+  init_file ${file_name}
+  for size in 1 10 100 1000 10000; do
+    echo "ioBench-${size}-4-${i}:"
+    update_caf_application_ini 4 ${i}
+    benchmark ioBench 11 ${mobi3} ${size} ${file_name}
+    echo
+  done;
+done;
+
+
+for i in 0 1 2 8; do
+  file_name="${output_folder}/io-${i}-4"
+  init_file ${file_name}
+  for size in 1 10 100 1000 10000; do
+    echo "ioBench-${size}-${i}-4:"
+    update_caf_application_ini ${i} 4
+    benchmark ioBench 11 ${mobi3} ${size} ${file_name}
     echo
   done;
 done;
