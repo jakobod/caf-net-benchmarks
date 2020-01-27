@@ -74,7 +74,6 @@ struct config : actor_system_config {
   config() {
     opt_group{custom_options_, "global"}
       .add(mode, "mode,m", "one of 'local', 'ioBench', or 'netBench'")
-      .add(host, "host,H", "host to bind to")
       .add(port, "port,p", "port to bind to")
       .add(num_stages, "num-stages,n",
            "number of stages after source / before sink")
@@ -89,7 +88,6 @@ struct config : actor_system_config {
     put(content, "middleman.this-node", earth_id);
   }
 
-  std::string host = "localhost";
   uint16_t port = 8080;
   int num_stages = 0;
   size_t data_size = 1;
@@ -98,19 +96,28 @@ struct config : actor_system_config {
   uri mars_id;
 };
 
-net::socket_guard<net::tcp_stream_socket> accept(uint16_t port) {
+net::socket_guard<net::tcp_stream_socket> accept(uint16_t port,
+                                                 actor_system& sys) {
+  using namespace caf::net;
   uri::authority_type auth;
   auth.port = port;
   auth.host = "0.0.0.0"s;
   auto acceptor = *net::make_tcp_accept_socket(auth, false);
   port = *local_port(net::socket_cast<net::network_socket>(acceptor));
   auto acceptor_guard = net::make_socket_guard(acceptor);
-  cout << "opened acceptor on port " << port << endl;
-  return net::make_socket_guard(*net::accept(acceptor));
+  cerr << "opened acceptor on port " << port << endl;
+  if (auto socket = net::accept(acceptor); !socket) {
+    cerr << sys.render(socket.error()) << endl;
+    return make_socket_guard(tcp_stream_socket{invalid_socket_id});
+  } else {
+    return net::make_socket_guard(*socket);
+  }
 }
 
 void run_io_server(actor_system& sys, const config& cfg) {
-  auto sock = accept(cfg.port);
+  auto sock = accept(cfg.port, sys);
+  if (sock.socket() == net::invalid_socket)
+    return;
   auto src = sys.spawn(source, cfg.data_size);
   using io::network::scribe_impl;
   auto& mm = sys.middleman();
@@ -123,7 +130,9 @@ void run_io_server(actor_system& sys, const config& cfg) {
 
 void run_net_server(actor_system& sys, const config& cfg) {
   using namespace caf::net;
-  auto sock = accept(cfg.port);
+  auto sock = accept(cfg.port, sys);
+  if (sock.socket() == invalid_socket)
+    return;
   scoped_actor self{sys};
   auto src = sys.spawn(source, cfg.data_size);
   sys.registry().put(atom("source"), src);
@@ -135,7 +144,7 @@ void run_net_server(actor_system& sys, const config& cfg) {
 void caf_main(actor_system& sys, const config& cfg) {
   auto workers = get_or(sys.config(), "middleman.serializing_workers",
                         defaults::middleman::serializing_workers);
-  cout << "using " << workers << " workers for serializing";
+  cerr << "using " << workers << " workers for serializing";
   workers = get_or(sys.config(), "middleman.workers",
                    defaults::middleman::workers);
   cerr << "using " << workers << " workers for deserializing" << endl;

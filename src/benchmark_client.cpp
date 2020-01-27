@@ -115,18 +115,26 @@ struct config : actor_system_config {
   uri mars_id;
 };
 
-net::socket_guard<net::tcp_stream_socket> connect(const std::string& host,
-                                                  uint16_t port) {
+net::socket_guard<net::tcp_stream_socket>
+connect(const std::string& host, uint16_t port, actor_system& sys) {
+  using namespace caf::net;
   uri::authority_type dst;
   dst.port = port;
   dst.host = host;
-  cout << "connecting to " << to_string(dst) << endl;
-  return make_socket_guard(*net::make_connected_tcp_stream_socket(dst));
+  cerr << "connecting to " << to_string(dst) << endl;
+  if (auto socket = make_connected_tcp_stream_socket(dst); !socket) {
+    cerr << sys.render(socket.error());
+    return make_socket_guard(tcp_stream_socket{invalid_socket_id});
+  } else {
+    return make_socket_guard(*socket);
+  }
 }
 
 void run_io_client(actor_system& sys, const config& cfg) {
   using io::network::scribe_impl;
-  auto sock = connect(cfg.host, cfg.port);
+  auto sock = connect(cfg.host, cfg.port, sys);
+  if (sock.socket() == net::invalid_socket)
+    return;
   auto& mm = sys.middleman();
   auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
   io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, sock.release().id);
@@ -146,7 +154,9 @@ void run_io_client(actor_system& sys, const config& cfg) {
 
 void run_net_client(actor_system& sys, const config& cfg) {
   using namespace caf::net;
-  auto sock = connect(cfg.host, cfg.port);
+  auto sock = connect(cfg.host, cfg.port, sys);
+  if (sock.socket() == invalid_socket)
+    return;
   auto& mm = sys.network_manager();
   auto& backend = *dynamic_cast<net::backend::test*>(mm.backend("test"));
   backend.emplace(make_node_id(cfg.earth_id), {}, sock.release());
