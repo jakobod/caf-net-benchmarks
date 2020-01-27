@@ -102,7 +102,7 @@ net::socket_guard<net::tcp_stream_socket> accept(uint16_t port,
   uri::authority_type auth;
   auth.port = port;
   auth.host = "0.0.0.0"s;
-  auto acceptor = *net::make_tcp_accept_socket(auth, false);
+  auto acceptor = *net::make_tcp_accept_socket(auth, true);
   port = *local_port(net::socket_cast<net::network_socket>(acceptor));
   auto acceptor_guard = net::make_socket_guard(acceptor);
   cerr << "opened acceptor on port " << port << endl;
@@ -110,6 +110,7 @@ net::socket_guard<net::tcp_stream_socket> accept(uint16_t port,
     cerr << sys.render(socket.error()) << endl;
     return make_socket_guard(tcp_stream_socket{invalid_socket_id});
   } else {
+    cerr << "accepted socket " << socket->id << endl;
     return net::make_socket_guard(*socket);
   }
 }

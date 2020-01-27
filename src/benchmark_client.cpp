@@ -126,6 +126,7 @@ connect(const std::string& host, uint16_t port, actor_system& sys) {
     cerr << sys.render(socket.error());
     return make_socket_guard(tcp_stream_socket{invalid_socket_id});
   } else {
+    cerr << "connected socket " << socket->id << endl;
     return make_socket_guard(*socket);
   }
 }
