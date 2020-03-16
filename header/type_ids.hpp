@@ -18,35 +18,24 @@
 
 #pragma once
 
-#include <iostream>
-#include <string>
+#include <cstdint>
 #include <vector>
 
-#include "caf/expected.hpp"
 #include "caf/fwd.hpp"
-#include "caf/net/fwd.hpp"
+#include "caf/type_id.hpp"
 
-using socket_pair = std::pair<caf::net::stream_socket, caf::net::stream_socket>;
+CAF_BEGIN_TYPE_ID_BLOCK(caf_net_benchmark, caf::first_custom_type_id)
 
-enum class bench_mode { net, io, local, invalid };
+CAF_ADD_TYPE_ID(caf_net_benchmark, (std::vector<uint64_t>) )
+CAF_ADD_TYPE_ID(caf_net_benchmark, (caf::stream<uint64_t>) )
+CAF_ADD_TYPE_ID(caf_net_benchmark, (caf::stream<std::vector<uint64_t>>) )
+CAF_ADD_TYPE_ID(caf_net_benchmark, (std::vector<std::vector<uint64_t>>) )
 
-bench_mode convert(const std::string& str);
+CAF_ADD_ATOM(caf_net_benchmark, start_atom)
+CAF_ADD_ATOM(caf_net_benchmark, stop_atom)
+CAF_ADD_ATOM(caf_net_benchmark, done_atom)
+CAF_ADD_ATOM(caf_net_benchmark, io_bench_atom)
+CAF_ADD_ATOM(caf_net_benchmark, net_bench_atom)
+CAF_ADD_ATOM(caf_net_benchmark, local_ench_atom)
 
-caf::expected<std::pair<caf::net::stream_socket, caf::net::stream_socket>>
-make_connected_tcp_socket_pair();
-
-template <class T>
-void print_vector(const std::string& name, const std::vector<T>& vec) {
-  using namespace std;
-  cout << name << ": ";
-  for (const auto& v : vec) {
-    auto val = v.count();
-    cout << val << ", ";
-  }
-  cout << endl;
-}
-
-template <class T>
-void erase(std::vector<T>& vec, size_t begin, size_t end) {
-  vec.erase(vec.begin() + begin, vec.begin() + end);
-}
+CAF_END_TYPE_ID_BLOCK(caf_net_benchmark)
