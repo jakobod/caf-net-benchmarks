@@ -34,17 +34,13 @@
 #include "caf/net/tcp_accept_socket.hpp"
 #include "caf/net/tcp_stream_socket.hpp"
 #include "caf/uri.hpp"
+#include "type_ids.hpp"
+#include "utility.hpp"
 
 using namespace std;
 using namespace caf;
 
 namespace {
-
-using start_atom = atom_constant<atom("start")>;
-using done_atom = atom_constant<atom("done")>;
-using io_bench_atom = atom_constant<atom("ioBench")>;
-using net_bench_atom = atom_constant<atom("netBench")>;
-using local_bench_atom = atom_constant<atom("localBench")>;
 
 behavior source(event_based_actor* self, size_t data_size) {
   using namespace std::chrono;
@@ -72,26 +68,25 @@ behavior source(event_based_actor* self, size_t data_size) {
 
 struct config : actor_system_config {
   config() {
+    init_global_meta_objects<caf_net_benchmark_type_ids>();
+    io::middleman::init_global_meta_objects();
     opt_group{custom_options_, "global"}
-      .add(mode, "mode,m", "one of 'local', 'ioBench', or 'netBench'")
+      .add(mode, "mode,m", "one of 'local', 'io', or 'net'")
       .add(port, "port,p", "port to bind to")
       .add(num_stages, "num-stages,n",
            "number of stages after source / before sink")
       .add(data_size, "data-size,d", "size of messages to send");
-
-    add_message_type<std::vector<uint64_t>>("std::vector<uint64_t>");
     earth_id = *make_uri("test://earth");
     mars_id = *make_uri("test://mars");
     load<net::middleman, net::backend::test>();
-    set("logger.file-verbosity", atom("trace"));
     set("logger.file-name", "source.log");
     put(content, "middleman.this-node", earth_id);
   }
 
+  std::string mode;
   uint16_t port = 8080;
   int num_stages = 0;
   size_t data_size = 1;
-  atom_value mode = net_bench_atom::value;
   uri earth_id;
   uri mars_id;
 };
@@ -124,8 +119,8 @@ void run_io_server(actor_system& sys, const config& cfg) {
   auto& mm = sys.middleman();
   auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
   io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, sock.release().id);
-  auto bb = mm.named_broker<io::basp_broker>(atom("BASP"));
-  anon_send(bb, publish_atom::value, move(scribe), uint16_t{8080},
+  auto bb = mm.named_broker<io::basp_broker>("BASP");
+  anon_send(bb, publish_atom_v, move(scribe), uint16_t{8080},
             actor_cast<strong_actor_ptr>(src), set<string>{});
 }
 
@@ -136,32 +131,26 @@ void run_net_server(actor_system& sys, const config& cfg) {
     return;
   scoped_actor self{sys};
   auto src = sys.spawn(source, cfg.data_size);
-  sys.registry().put(atom("source"), src);
+  sys.registry().put("source", src);
   auto& mm = sys.network_manager();
   auto& backend = *dynamic_cast<net::backend::test*>(mm.backend("test"));
   backend.emplace(make_node_id(cfg.mars_id), {}, sock.release());
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
-  auto workers = get_or(sys.config(), "middleman.serializing_workers",
-                        defaults::middleman::serializing_workers);
-  cerr << "using " << workers << " workers for serializing";
-  workers = get_or(sys.config(), "middleman.workers",
-                   defaults::middleman::workers);
-  cerr << "using " << workers << " workers for deserializing" << endl;
-  switch (static_cast<uint64_t>(cfg.mode)) {
-    case io_bench_atom::uint_value(): {
+  switch (convert(cfg.mode)) {
+    case bench_mode::io: {
       cerr << "run in 'ioBench' server mode " << endl;
       run_io_server(sys, cfg);
       break;
     }
-    case net_bench_atom::uint_value(): {
+    case bench_mode::net: {
       cerr << "run in 'netBench' server mode " << endl;
       run_net_server(sys, cfg);
       break;
     }
     default:
-      cerr << "No mode specified!" << endl;
+      cerr << "mode is invalid" << cfg.mode << endl;
       break;
   }
 }

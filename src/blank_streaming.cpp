@@ -33,21 +33,13 @@
 #include "caf/net/tcp_accept_socket.hpp"
 #include "caf/net/tcp_stream_socket.hpp"
 #include "caf/uri.hpp"
+#include "type_ids.hpp"
+#include "utility.hpp"
 
 using namespace std;
 using namespace caf;
 
 namespace {
-
-using stream_socket_pair = std::pair<net::stream_socket, net::stream_socket>;
-
-using start_atom = atom_constant<atom("start")>;
-using stop_atom = atom_constant<atom("stop")>;
-using tick_atom = atom_constant<atom("tick")>;
-using done_atom = atom_constant<atom("done")>;
-using io_bench_atom = atom_constant<atom("ioBench")>;
-using net_bench_atom = atom_constant<atom("netBench")>;
-using local_bench_atom = atom_constant<atom("localBench")>;
 
 struct tick_state {
   size_t count = 0;
@@ -68,14 +60,14 @@ behavior source(stateful_actor<source_state>* self, size_t iterations,
                 size_t data_size) {
   return {
     [=](tick_atom) {
-      self->delayed_send(self, std::chrono::seconds(1), tick_atom::value);
+      self->delayed_send(self, std::chrono::seconds(1), tick_atom_v);
       self->state.tick();
       if (self->state.tick_count++ >= iterations)
         self->quit();
     },
     [=](start_atom start, const actor& sink) {
       std::vector<uint64_t> data(data_size);
-      for(int i = 0; i < 100; ++i)
+      for (int i = 0; i < 100; ++i)
         self->send(sink, data);
       self->send(self, start, sink);
     },
@@ -90,15 +82,15 @@ struct sink_state : tick_state {
 
 behavior sink(stateful_actor<sink_state>* self, actor src,
               const actor& listener, size_t iterations) {
-  self->send(src, start_atom::value, self);
-  self->delayed_send(self, std::chrono::seconds(1), tick_atom::value);
+  self->send(src, start_atom_v, self);
+  self->delayed_send(self, std::chrono::seconds(1), tick_atom_v);
   return {
     [=](tick_atom) {
-      self->delayed_send(self, std::chrono::seconds(1), tick_atom::value);
+      self->delayed_send(self, std::chrono::seconds(1), tick_atom_v);
       self->state.tick();
       if (self->state.tick_count++ >= iterations) {
-        self->send(src, stop_atom::value);
-        self->send(listener, done_atom::value);
+        self->send(src, stop_atom_v);
+        self->send(listener, done_atom_v);
         self->quit();
       }
     },
@@ -108,6 +100,8 @@ behavior sink(stateful_actor<sink_state>* self, actor src,
 
 struct config : actor_system_config {
   config() {
+    init_global_meta_objects<caf_net_benchmark_type_ids>();
+    io::middleman::init_global_meta_objects();
     opt_group{custom_options_, "global"}
       .add(mode, "mode,m", "one of 'local', 'ioBench', or 'netBench'")
       .add(num_stages, "num-stages,n",
@@ -116,25 +110,22 @@ struct config : actor_system_config {
            "number of iterations that should be run")
       .add(data_size, "data_size,d",
            "size of the vector that should be streamed");
-
-    add_message_type<uint64_t>("uint64_t");
     earth_id = *make_uri("test://earth");
     mars_id = *make_uri("test://mars");
     put(content, "middleman.this-node", earth_id);
     load<net::middleman, net::backend::test>();
-    set("logger.file-verbosity", atom("trace"));
     set("logger.file-name", "source.log");
   }
 
   int num_stages = 0;
   size_t iterations = 10;
-  atom_value mode;
+  std::string mode;
   uri earth_id;
   uri mars_id;
   size_t data_size = 1024;
 };
 
-expected<stream_socket_pair> make_connected_tcp_socket_pair() {
+expected<socket_pair> make_connected_tcp_socket_pair() {
   using namespace net;
   tcp_accept_socket acceptor;
   uri::authority_type auth;
@@ -164,21 +155,17 @@ expected<stream_socket_pair> make_connected_tcp_socket_pair() {
 void io_run_sink(net::stream_socket, net::stream_socket second,
                  size_t iterations) {
   actor_system_config cfg;
-  cfg.add_message_type<uint64_t>("uint64_t");
   cfg.load<io::middleman>();
   cfg.parse(0, nullptr);
-  cfg.set("logger.file-verbosity", atom("trace"));
   cfg.set("logger.file-name", "sink.log");
   actor_system sys{cfg};
   using io::network::scribe_impl;
   auto& mm = sys.middleman();
   auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
   io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, second.id);
-  auto bb = mm.named_broker<io::basp_broker>(atom("BASP"));
+  auto bb = mm.named_broker<io::basp_broker>("BASP");
   scoped_actor self{sys};
-  self
-    ->request(bb, infinite, connect_atom::value, std::move(scribe),
-              uint16_t{8080})
+  self->request(bb, infinite, connect_atom_v, std::move(scribe), uint16_t{8080})
     .receive(
       [&](node_id&, strong_actor_ptr& ptr, std::set<std::string>&) {
         if (ptr == nullptr) {
@@ -191,14 +178,12 @@ void io_run_sink(net::stream_socket, net::stream_socket second,
   self->receive([](done_atom) {});
 }
 
-void net_run_sink(stream_socket_pair sockets, size_t iterations) {
+void net_run_sink(socket_pair sockets, size_t iterations) {
   auto mars_id = *make_uri("test://mars");
   auto earth_id = *make_uri("test://earth");
   actor_system_config cfg;
-  cfg.add_message_type<uint64_t>("uint64_t");
   cfg.load<net::middleman, net::backend::test>();
   cfg.parse(0, nullptr);
-  cfg.set("logger.file-verbosity", atom("trace"));
   cfg.set("logger.file-name", "sink.log");
   put(cfg.content, "middleman.this-node", mars_id);
   cfg.parse(0, nullptr);
@@ -223,8 +208,8 @@ void net_run_sink(stream_socket_pair sockets, size_t iterations) {
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
-  switch (static_cast<uint64_t>(cfg.mode)) {
-    case io_bench_atom::uint_value(): {
+  switch (convert(cfg.mode)) {
+    case bench_mode::io: {
       cerr << "run in 'ioBench' mode" << endl;
       std::pair<net::stream_socket, net::stream_socket> sockets;
       if (auto res = make_connected_tcp_socket_pair()) {
@@ -240,8 +225,8 @@ void caf_main(actor_system& sys, const config& cfg) {
       auto& mm = sys.middleman();
       auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
       io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, sockets.first.id);
-      auto bb = mm.named_broker<io::basp_broker>(atom("BASP"));
-      anon_send(bb, publish_atom::value, std::move(scribe), uint16_t{8080},
+      auto bb = mm.named_broker<io::basp_broker>("BASP");
+      anon_send(bb, publish_atom_v, std::move(scribe), uint16_t{8080},
                 actor_cast<strong_actor_ptr>(src), std::set<std::string>{});
       auto iterations = cfg.iterations;
       auto f = [sockets, iterations] {
@@ -253,7 +238,7 @@ void caf_main(actor_system& sys, const config& cfg) {
       cout << endl;
       break;
     }
-    case net_bench_atom::uint_value(): {
+    case bench_mode::net: {
       cerr << "run in 'netBench' mode " << endl;
       std::pair<net::stream_socket, net::stream_socket> sockets;
       if (auto res = make_connected_tcp_socket_pair()) {
@@ -265,7 +250,7 @@ void caf_main(actor_system& sys, const config& cfg) {
       cerr << "sockets: " << sockets.first.id << ", " << sockets.second.id
            << endl;
       auto src = sys.spawn(source, cfg.iterations, cfg.data_size);
-      sys.registry().put(atom("source"), src);
+      sys.registry().put("source", src);
       auto& mm = sys.network_manager();
       auto& backend = *dynamic_cast<net::backend::test*>(mm.backend("test"));
       backend.emplace(make_node_id(cfg.mars_id), sockets.first, sockets.second);
@@ -277,6 +262,8 @@ void caf_main(actor_system& sys, const config& cfg) {
       anon_send_exit(src, exit_reason::user_shutdown);
       break;
     }
+    default:
+      cerr << "mode is invalid: " << cfg.mode << endl;
   }
 }
 

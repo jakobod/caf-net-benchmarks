@@ -28,6 +28,17 @@
 #include "caf/net/tcp_stream_socket.hpp"
 #include "caf/uri.hpp"
 
+bench_mode convert(const std::string& str) {
+  if (str == "net")
+    return bench_mode::net;
+  else if (str == "io")
+    return bench_mode::io;
+  else if (str == "local")
+    return bench_mode::local;
+  else
+    return bench_mode::invalid;
+}
+
 caf::expected<std::pair<caf::net::stream_socket, caf::net::stream_socket>>
 make_connected_tcp_socket_pair() {
   using namespace std;
