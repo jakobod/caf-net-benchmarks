@@ -52,7 +52,7 @@ struct sink_state {
 };
 
 behavior sink(stateful_actor<sink_state>* self, actor src, size_t iterations) {
-  self->send(self * src, start_atom_v);
+  self->send(self * src, start_atom_v, self);
   self->send(self, tick_atom_v);
   return {
     [=](tick_atom) {
@@ -65,7 +65,8 @@ behavior sink(stateful_actor<sink_state>* self, actor src, size_t iterations) {
       }
     },
     [=](const stream<std::vector<uint64_t>>& in) {
-      return self->make_sink(
+      return attach_stream_sink(
+        self,
         // input stream
         in,
         // initialize state
@@ -84,7 +85,7 @@ behavior sink(stateful_actor<sink_state>* self, actor src, size_t iterations) {
 
 struct config : actor_system_config {
   config() {
-    init_global_meta_objects<caf_net_benchmark_type_ids>();
+    init_global_meta_objects<caf::id_block::caf_net_benchmark>();
     caf::io::middleman::init_global_meta_objects();
     opt_group{custom_options_, "global"}
       .add(mode, "mode,m", "one of 'local', 'io', or 'net'")
@@ -117,7 +118,7 @@ connect(const std::string& host, uint16_t port, actor_system& sys) {
   dst.host = host;
   cerr << "connecting to " << to_string(dst) << endl;
   if (auto socket = make_connected_tcp_stream_socket(dst); !socket) {
-    cerr << sys.render(socket.error());
+    cerr << to_string(socket.error());
     return make_socket_guard(tcp_stream_socket{invalid_socket_id});
   } else {
     cerr << "connected socket " << socket->id << endl;
@@ -144,7 +145,7 @@ void run_io_client(actor_system& sys, const config& cfg) {
         }
         sys.spawn(sink, actor_cast<actor>(ptr), cfg.iterations);
       },
-      [&](error& err) { cerr << "ERROR: " << sys.render(err) << endl; });
+      [&](error& err) { cerr << "ERROR: " << to_string(err) << endl; });
 }
 
 void run_net_client(actor_system& sys, const config& cfg) {
