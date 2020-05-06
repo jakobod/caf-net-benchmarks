@@ -29,11 +29,11 @@
 #include "caf/uri.hpp"
 
 bench_mode convert(const std::string& str) {
-  if (str == "net")
+  if (str == "netBench")
     return bench_mode::net;
-  else if (str == "io")
+  else if (str == "ioBench")
     return bench_mode::io;
-  else if (str == "local")
+  else if (str == "localBench")
     return bench_mode::local;
   else
     return bench_mode::invalid;

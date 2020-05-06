@@ -80,7 +80,7 @@ behavior pong_actor(event_based_actor*) {
 
 struct config : actor_system_config {
   config() {
-    init_global_meta_objects<caf_net_benchmark_type_ids>();
+    init_global_meta_objects<caf::id_block::caf_net_benchmark>();
     io::middleman::init_global_meta_objects();
     opt_group{custom_options_, "global"}
       .add(mode, "mode,m", "one of 'ioBench', or 'netBench'")
@@ -125,7 +125,7 @@ void io_run_ping_actor(socket_pair sockets, size_t iterations) {
         auto act = sys.spawn(ping_actor, actor_cast<actor>(ptr), iterations);
         anon_send(act, start_atom_v);
       },
-      [&](error& err) { cerr << "ERROR: " << sys.render(err) << endl; });
+      [&](error& err) { cerr << "ERROR: " << to_string(err) << endl; });
 }
 
 void net_run_ping_actor(socket_pair sockets, size_t iterations) {

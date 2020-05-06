@@ -47,10 +47,11 @@ behavior source(event_based_actor* self, size_t data_size) {
   std::vector<uint64_t> vec(data_size);
   return {
     [=](done_atom) { self->quit(); },
-    [=](start_atom) {
+    [=](start_atom, actor sink) {
       cerr << "START from: " << to_string(self->current_sender()).c_str()
            << endl;
-      return self->make_source(
+      return attach_stream_source(
+        self, sink,
         // initialize state
         [&](unit_t&) {
           // nop
@@ -68,8 +69,9 @@ behavior source(event_based_actor* self, size_t data_size) {
 
 struct config : actor_system_config {
   config() {
-    init_global_meta_objects<caf_net_benchmark_type_ids>();
+    init_global_meta_objects<caf::id_block::caf_net_benchmark>();
     io::middleman::init_global_meta_objects();
+    net::middleman::init_global_meta_objects();
     opt_group{custom_options_, "global"}
       .add(mode, "mode,m", "one of 'local', 'io', or 'net'")
       .add(port, "port,p", "port to bind to")
@@ -78,7 +80,7 @@ struct config : actor_system_config {
       .add(data_size, "data-size,d", "size of messages to send");
     earth_id = *make_uri("test://earth");
     mars_id = *make_uri("test://mars");
-    load<net::middleman, net::backend::test>();
+    // load<net::middleman, net::backend::test>();
     set("logger.file-name", "source.log");
     put(content, "middleman.this-node", earth_id);
   }
@@ -102,7 +104,7 @@ net::socket_guard<net::tcp_stream_socket> accept(uint16_t port,
   auto acceptor_guard = net::make_socket_guard(acceptor);
   cerr << "opened acceptor on port " << port << endl;
   if (auto socket = net::accept(acceptor); !socket) {
-    cerr << sys.render(socket.error()) << endl;
+    cerr << to_string(socket.error()) << endl;
     return make_socket_guard(tcp_stream_socket{invalid_socket_id});
   } else {
     cerr << "accepted socket " << socket->id << endl;
@@ -157,4 +159,4 @@ void caf_main(actor_system& sys, const config& cfg) {
 
 } // namespace
 
-CAF_MAIN(io::middleman)
+CAF_MAIN()

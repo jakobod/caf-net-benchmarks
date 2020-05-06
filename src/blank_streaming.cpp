@@ -100,7 +100,7 @@ behavior sink(stateful_actor<sink_state>* self, actor src,
 
 struct config : actor_system_config {
   config() {
-    init_global_meta_objects<caf_net_benchmark_type_ids>();
+    init_global_meta_objects<caf::id_block::caf_net_benchmark>();
     io::middleman::init_global_meta_objects();
     opt_group{custom_options_, "global"}
       .add(mode, "mode,m", "one of 'local', 'ioBench', or 'netBench'")
@@ -174,7 +174,7 @@ void io_run_sink(net::stream_socket, net::stream_socket second,
         }
         sys.spawn(sink, actor_cast<actor>(ptr), self, iterations);
       },
-      [&](error& err) { cerr << "ERROR: " << sys.render(err) << endl; });
+      [&](error& err) { cerr << "ERROR: " << to_string(err) << endl; });
   self->receive([](done_atom) {});
 }
 
