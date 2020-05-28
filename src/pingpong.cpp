@@ -42,39 +42,52 @@ namespace {
 
 struct tick_state {
   void tick() {
-    cerr << count << ", ";
+    cout << count << ", ";
     count = 0;
   }
 
   size_t count = 0;
-  size_t tick_count = 0;
+  size_t iterations = 0;
+  size_t arrived = 0;
 };
 
 behavior ping_actor(stateful_actor<tick_state>* self, actor sink,
-                    size_t iterations) {
+                    size_t iterations, size_t num_pings, bool wait) {
   return {
     [=](tick_atom) {
       self->delayed_send(self, seconds(1), tick_atom_v);
       self->state.tick();
-      if (self->state.tick_count++ >= iterations) {
+      if (self->state.iterations++ >= iterations) {
+        cout << endl;
         self->send_exit(sink, exit_reason::user_shutdown);
         self->quit();
       }
     },
     [=](start_atom) {
+      for (int i = 0; i < num_pings; ++i)
+        self->send(sink, ping_atom_v);
       self->delayed_send(self, seconds(1), tick_atom_v);
-      self->send(sink, ping_atom_v);
     },
     [=](pong_atom) {
       self->state.count++;
-      return ping_atom_v;
+      if(wait) {
+        if(++self->state.arrived >= num_pings) {
+          self->state.arrived = 0;
+          for (int i = 0; i < num_pings; ++i)
+            self->send(sink, ping_atom_v);
+        }
+      } else {
+        self->send(sink, ping_atom_v);
+      }
     },
   };
 }
 
-behavior pong_actor(event_based_actor*) {
+behavior pong_actor(event_based_actor* self) {
   return {
-    [](ping_atom) { return pong_atom_v; },
+    [=](ping_atom) { 
+      return pong_atom_v;
+    }
   };
 }
 
@@ -84,10 +97,10 @@ struct config : actor_system_config {
     io::middleman::init_global_meta_objects();
     opt_group{custom_options_, "global"}
       .add(mode, "mode,m", "one of 'ioBench', or 'netBench'")
-      .add(num_stages, "num-stages,n",
-           "number of stages after source / before sink")
       .add(iterations, "iterations,i",
-           "number of iterations that should be run");
+           "number of iterations that should be run")
+      .add(num_pings, "num_pings,n", "number of pings that should be sent")
+      .add(wait, "wait,w", "wait for a roundtrip to complete");
 
     earth_id = *make_uri("test://earth");
     mars_id = *make_uri("test://mars");
@@ -96,14 +109,17 @@ struct config : actor_system_config {
     set("logger.file-name", "source.log");
   }
 
+  bool wait = false;
   int num_stages = 0;
   size_t iterations = 10;
+  size_t num_pings = 1;
   std::string mode;
   uri earth_id;
   uri mars_id;
 };
 
-void io_run_ping_actor(socket_pair sockets, size_t iterations) {
+void io_run_ping_actor(socket_pair sockets, size_t iterations,
+                       size_t num_pings, bool wait) {
   actor_system_config cfg;
   cfg.load<io::middleman>();
   cfg.parse(0, nullptr);
@@ -122,13 +138,15 @@ void io_run_ping_actor(socket_pair sockets, size_t iterations) {
           cerr << "ERROR: could not get a handle to remote source\n";
           return;
         }
-        auto act = sys.spawn(ping_actor, actor_cast<actor>(ptr), iterations);
+        auto act = sys.spawn(ping_actor, actor_cast<actor>(ptr), iterations,
+                             num_pings, wait);
         anon_send(act, start_atom_v);
       },
       [&](error& err) { cerr << "ERROR: " << to_string(err) << endl; });
 }
 
-void net_run_ping_actor(socket_pair sockets, size_t iterations) {
+void net_run_ping_actor(socket_pair sockets, size_t iterations,
+                        size_t num_pings, bool wait) {
   auto mars_id = *make_uri("test://mars");
   auto earth_id = *make_uri("test://earth");
   actor_system_config cfg;
@@ -147,13 +165,14 @@ void net_run_ping_actor(socket_pair sockets, size_t iterations) {
   actor ping;
   self->receive([&](strong_actor_ptr& ptr, const set<string>&) {
     cerr << "got source: " << to_string(ptr).c_str() << " -> run" << endl;
-    ping = sys.spawn(ping_actor, actor_cast<actor>(ptr), iterations);
+    ping = sys.spawn(ping_actor, actor_cast<actor>(ptr), iterations, num_pings, wait);
   });
   // Start ping_pong
   anon_send(ping, start_atom_v);
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
+  cout << cfg.num_pings << ", " << cfg.num_pings << ", ";
   switch (convert(cfg.mode)) {
     case bench_mode::io: {
       cerr << "run in 'ioBench' mode" << endl;
@@ -168,7 +187,9 @@ void caf_main(actor_system& sys, const config& cfg) {
       auto bb = mm.named_broker<io::basp_broker>("BASP");
       anon_send(bb, publish_atom_v, move(scribe), uint16_t{8080},
                 actor_cast<strong_actor_ptr>(src), set<string>{});
-      auto f = [sockets, &cfg] { io_run_ping_actor(sockets, cfg.iterations); };
+      auto f = [sockets, &cfg] {
+        io_run_ping_actor(sockets, cfg.iterations, cfg.num_pings, cfg.wait);
+      };
       thread t{f};
       t.join();
       break;
@@ -185,7 +206,9 @@ void caf_main(actor_system& sys, const config& cfg) {
       auto ep_pair = backend.emplace(make_node_id(cfg.mars_id), sockets.first,
                                      sockets.second);
       cerr << "spin up second actor sytem" << endl;
-      auto f = [sockets, &cfg] { net_run_ping_actor(sockets, cfg.iterations); };
+      auto f = [sockets, &cfg] {
+        net_run_ping_actor(sockets, cfg.iterations, cfg.num_pings, cfg.wait);
+      };
       thread t{f};
       t.join();
       break;
@@ -193,6 +216,7 @@ void caf_main(actor_system& sys, const config& cfg) {
     default:
       cerr << "mode is invalid: " << cfg.mode << endl;
   }
+  cerr << endl;
 }
 
 } // namespace
