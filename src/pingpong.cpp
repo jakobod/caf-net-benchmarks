@@ -70,8 +70,8 @@ behavior ping_actor(stateful_actor<tick_state>* self, actor sink,
     },
     [=](pong_atom) {
       self->state.count++;
-      if(wait) {
-        if(++self->state.arrived >= num_pings) {
+      if (wait) {
+        if (++self->state.arrived >= num_pings) {
           self->state.arrived = 0;
           for (int i = 0; i < num_pings; ++i)
             self->send(sink, ping_atom_v);
@@ -84,11 +84,7 @@ behavior ping_actor(stateful_actor<tick_state>* self, actor sink,
 }
 
 behavior pong_actor(event_based_actor* self) {
-  return {
-    [=](ping_atom) { 
-      return pong_atom_v;
-    }
-  };
+  return {[=](ping_atom) { return pong_atom_v; }};
 }
 
 struct config : actor_system_config {
@@ -113,13 +109,13 @@ struct config : actor_system_config {
   int num_stages = 0;
   size_t iterations = 10;
   size_t num_pings = 1;
-  std::string mode;
+  std::string mode = "netBench";
   uri earth_id;
   uri mars_id;
 };
 
-void io_run_ping_actor(socket_pair sockets, size_t iterations,
-                       size_t num_pings, bool wait) {
+void io_run_ping_actor(socket_pair sockets, size_t iterations, size_t num_pings,
+                       bool wait) {
   actor_system_config cfg;
   cfg.load<io::middleman>();
   cfg.parse(0, nullptr);
@@ -165,7 +161,8 @@ void net_run_ping_actor(socket_pair sockets, size_t iterations,
   actor ping;
   self->receive([&](strong_actor_ptr& ptr, const set<string>&) {
     cerr << "got source: " << to_string(ptr).c_str() << " -> run" << endl;
-    ping = sys.spawn(ping_actor, actor_cast<actor>(ptr), iterations, num_pings, wait);
+    ping = sys.spawn(ping_actor, actor_cast<actor>(ptr), iterations, num_pings,
+                     wait);
   });
   // Start ping_pong
   anon_send(ping, start_atom_v);
