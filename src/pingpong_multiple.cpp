@@ -30,7 +30,6 @@
 #include "caf/io/scribe.hpp"
 #include "caf/net/backend/tcp.hpp"
 #include "caf/net/basp/ec.hpp"
-#include "caf/net/defaults.hpp"
 #include "caf/net/endpoint_manager.hpp"
 #include "caf/net/middleman.hpp"
 #include "caf/uri.hpp"
@@ -63,14 +62,11 @@ struct tick_state {
 
 behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
                     size_t iterations) {
-  aout(self) << "source spawned" << endl;
   return {
-    [=](hello_atom, actor sink) {
-      aout(self) << "got hello!" << endl;
+    [=](hello_atom, const actor& sink) {
       self->state.sinks.push_back(sink);
       if (self->state.sinks.size() >= num_remote_nodes) {
         self->send(self, start_atom_v);
-        aout(self) << "got all hellos" << endl;
       }
     },
     [=](start_atom) {
@@ -83,9 +79,8 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
       self->state.tick();
       if (++self->state.iterations >= iterations) {
         cout << endl;
-        self->state.for_each([=](const auto& sink) {
-          self->send_exit(sink, exit_reason::normal);
-        });
+        self->state.for_each(
+          [=](const auto& sink) { self->send(sink, done_atom_v); });
         self->quit();
       }
     },
@@ -97,10 +92,10 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
 }
 
 behavior pong_actor(event_based_actor* self, const actor& source) {
-  aout(self) << "sink spawned" << endl;
   return {
     [=](start_atom) { self->send(source, hello_atom_v, self); },
     [=](ping_atom) { return pong_atom_v; },
+    [=](done_atom) { self->quit(); },
   };
 }
 
@@ -112,28 +107,48 @@ struct config : actor_system_config {
       .add(mode, "mode,m", "one of 'ioBench', or 'netBench'")
       .add(iterations, "iterations,i",
            "number of iterations that should be run")
-      .add(num_pings, "pings,p", "number of pings that should be sent")
-      .add(num_sources, "sources,s", "number of sources to spawn")
-      .add(num_sinks, "sinks,S", "number of sinks to spawn")
-      .add(num_remote_nodes, "remote_nodes,r", "number of remote nodes");
+      .add(num_remote_nodes, "num_nodes,n", "number of remote nodes");
     source_id = *make_uri("tcp://source");
     put(content, "middleman.this-node", source_id);
     load<net::middleman, net::backend::tcp>();
     set("logger.file-name", "source.log");
   }
 
-  int num_stages = 0;
-  size_t num_sources = 1;
-  size_t num_sinks = 1;
   size_t iterations = 10;
-  size_t num_pings = 1;
-  std::string mode = "netBench";
   size_t num_remote_nodes = 1;
+  std::string mode = "netBench";
   uri source_id;
 };
 
+void io_run_node(uint16_t port, int sock) {
+  actor_system_config cfg;
+  cfg.load<io::middleman>();
+  cfg.parse(0, nullptr);
+  cfg.set("logger.file-name", "sink.log");
+  actor_system sys{cfg};
+  using io::network::scribe_impl;
+  auto& mm = sys.middleman();
+  auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
+  io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, sock);
+  auto bb = mm.named_broker<io::basp_broker>("BASP");
+  scoped_actor self{sys};
+  self->request(bb, infinite, connect_atom_v, move(scribe), port)
+    .receive(
+      [&](node_id&, strong_actor_ptr& ptr, set<string>&) {
+        if (ptr == nullptr) {
+          cerr << "ERROR: could not get a handle to remote source" << endl;
+          return;
+        }
+        auto sink = sys.spawn(pong_actor, actor_cast<actor>(ptr));
+        anon_send(sink, start_atom_v);
+      },
+      [&](error& err) {
+        cerr << "ERROR: " << to_string(err) << endl;
+        abort();
+      });
+}
+
 void net_run_node(uri id, net::stream_socket sock) {
-  cerr << __FUNCTION__ << endl;
   actor_system_config cfg;
   cfg.load<net::middleman, net::backend::tcp>();
   cfg.parse(0, nullptr);
@@ -157,10 +172,24 @@ void net_run_node(uri id, net::stream_socket sock) {
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
-  cout << cfg.num_pings << ", " << cfg.num_pings << ", ";
+  vector<thread> threads;
   switch (convert(cfg.mode)) {
     case bench_mode::io: {
-      // nop
+      cerr << "run in 'ioBench' mode" << endl;
+      using io::network::scribe_impl;
+      auto& mm = sys.middleman();
+      auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
+      auto src = sys.spawn(ping_actor, cfg.num_remote_nodes, cfg.iterations);
+      auto bb = mm.named_broker<io::basp_broker>("BASP");
+      for (size_t port = 0; port < cfg.num_remote_nodes; ++port) {
+        auto p = *net::make_stream_socket_pair();
+        io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, p.first.id);
+        anon_send(bb, publish_atom_v, move(scribe), uint16_t(8080 + port),
+                  actor_cast<strong_actor_ptr>(src), set<string>{});
+        auto f = [=]() { io_run_node(port, p.second.id); };
+        threads.emplace_back(f);
+      }
+      break;
     }
     case bench_mode::net: {
       cerr << "run in 'netBench' mode " << endl;
@@ -168,7 +197,6 @@ void caf_main(actor_system& sys, const config& cfg) {
       auto& backend = *dynamic_cast<net::backend::tcp*>(mm.backend("tcp"));
       auto source = sys.spawn(ping_actor, cfg.num_remote_nodes, cfg.iterations);
       mm.publish(source, "source");
-      vector<thread> threads;
       for (size_t i = 0; i < cfg.num_remote_nodes; ++i) {
         auto p = *net::make_stream_socket_pair();
         auto sink_id = *make_uri("tcp://sink"s + to_string(i));
@@ -176,16 +204,15 @@ void caf_main(actor_system& sys, const config& cfg) {
         auto f = [=]() { net_run_node(sink_id, p.second); };
         threads.emplace_back(f);
       }
-      for (auto& t : threads) {
-        t.join();
-      }
       break;
     }
     default:
       cerr << "mode is invalid: " << cfg.mode << endl;
   }
+  for (auto& t : threads)
+    t.join();
   cerr << endl;
-}
+} // namespace
 
 } // namespace
 
