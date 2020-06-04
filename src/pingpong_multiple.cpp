@@ -159,7 +159,9 @@ void net_run_node(uri id, net::stream_socket sock) {
   auto& mm = sys.network_manager();
   auto& backend = *dynamic_cast<net::backend::tcp*>(mm.backend("tcp"));
   auto source_id = *make_uri("tcp://source/name/source");
-  backend.emplace(make_node_id(*source_id.authority_only()), sock);
+  auto ret = backend.emplace(make_node_id(*source_id.authority_only()), sock);
+  if (!ret)
+    cerr << " emplace failed with err: " << to_string(ret.error()) << endl;
   auto source = mm.remote_actor(source_id);
   if (!source) {
     cerr << "got error while resolving: " << to_string(source.error()) << endl;
@@ -173,6 +175,7 @@ void net_run_node(uri id, net::stream_socket sock) {
 
 void caf_main(actor_system& sys, const config& cfg) {
   vector<thread> threads;
+  cout << cfg.num_remote_nodes << ", ";
   switch (convert(cfg.mode)) {
     case bench_mode::io: {
       cerr << "run in 'ioBench' mode" << endl;
@@ -212,6 +215,7 @@ void caf_main(actor_system& sys, const config& cfg) {
   for (auto& t : threads)
     t.join();
   cerr << endl;
+  cout << endl;
 } // namespace
 
 } // namespace
