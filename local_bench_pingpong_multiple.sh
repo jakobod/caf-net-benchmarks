@@ -17,18 +17,25 @@ function init_caf_application_ini() {
 # set maximum number of threads for each actor-system.
 init_caf_application_ini
 
-net_file_name="${output_folder}/pingpong-multiple-net"
-init_file ${net_file_name}
-for num_nodes in {1..32..1}; do
-  echo "starting netBench-${num_nodes}"
-  ./release/pingpong_multiple -mnetBench -n${num_nodes} >> ${net_file_name}.out 2> ${net_file_name}.err
+for pings in 1 10 100; do
+  echo "------------------------ ${pings} pings ------------------------"
+  net_file_name="${output_folder}/pingpong-multiple-${pings}-pings-net"
+  init_file ${net_file_name}
+  for num_nodes in {1..32..1}; do
+    echo "starting netBench-${num_nodes}"
+    ./release/pingpong_multiple -mnetBench -n${num_nodes} -p${pings} >> ${net_file_name}.out 2> ${net_file_name}.err
+  done;
 done;
 
 echo ""
 
-io_file_name="${output_folder}/pingpong-multiple-io"
-init_file ${io_file_name}
-for num_nodes in {1..32..1}; do
-  echo "starting ioBench-${num_nodes}"
-  ./release/pingpong_multiple -mioBench -n${num_nodes} >> ${io_file_name}.out 2> ${io_file_name}.err
+for pings in 1 10 100; do
+  echo "------------------------ ${pings} pings ------------------------"
+  io_file_name="${output_folder}/pingpong-multiple-${pings}-pings-io"
+  init_file ${io_file_name}
+  for num_nodes in {1..32..1}; do
+    echo "starting ioBench-${num_nodes}"
+    ./release/pingpong_multiple -mioBench -n${num_nodes} -p${pings}>> ${io_file_name}.out 2> ${io_file_name}.err
+  done;
+  echo ""
 done;

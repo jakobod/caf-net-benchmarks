@@ -61,7 +61,7 @@ struct tick_state {
 };
 
 behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
-                    size_t iterations) {
+                    size_t iterations, size_t num_pings) {
   return {
     [=](hello_atom, const actor& sink) {
       self->state.sinks.push_back(sink);
@@ -70,8 +70,10 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
       }
     },
     [=](start_atom) {
-      self->state.for_each(
-        [=](const auto& sink) { self->send(sink, ping_atom_v); });
+      self->state.for_each([=](const auto& sink) {
+        for (size_t i = 0; i < num_pings; ++i)
+          self->send(sink, ping_atom_v);
+      });
       self->delayed_send(self, seconds(1), tick_atom_v);
     },
     [=](tick_atom) {
@@ -107,7 +109,8 @@ struct config : actor_system_config {
       .add(mode, "mode,m", "one of 'ioBench', or 'netBench'")
       .add(iterations, "iterations,i",
            "number of iterations that should be run")
-      .add(num_remote_nodes, "num_nodes,n", "number of remote nodes");
+      .add(num_remote_nodes, "num_nodes,n", "number of remote nodes")
+      .add(num_pings, "pings,p", "number of pings to send");
     source_id = *make_uri("tcp://source");
     put(content, "middleman.this-node", source_id);
     load<net::middleman, net::backend::tcp>();
@@ -116,6 +119,7 @@ struct config : actor_system_config {
 
   size_t iterations = 10;
   size_t num_remote_nodes = 1;
+  size_t num_pings = 1;
   std::string mode = "netBench";
   uri source_id;
 };
@@ -175,6 +179,8 @@ void net_run_node(uri id, net::stream_socket sock) {
 
 void caf_main(actor_system& sys, const config& cfg) {
   vector<thread> threads;
+  auto src = sys.spawn(ping_actor, cfg.num_remote_nodes, cfg.iterations,
+                       cfg.num_pings);
   cout << cfg.num_remote_nodes << ", ";
   switch (convert(cfg.mode)) {
     case bench_mode::io: {
@@ -182,7 +188,6 @@ void caf_main(actor_system& sys, const config& cfg) {
       using io::network::scribe_impl;
       auto& mm = sys.middleman();
       auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
-      auto src = sys.spawn(ping_actor, cfg.num_remote_nodes, cfg.iterations);
       auto bb = mm.named_broker<io::basp_broker>("BASP");
       for (size_t port = 0; port < cfg.num_remote_nodes; ++port) {
         auto p = *net::make_stream_socket_pair();
@@ -198,8 +203,7 @@ void caf_main(actor_system& sys, const config& cfg) {
       cerr << "run in 'netBench' mode " << endl;
       auto& mm = sys.network_manager();
       auto& backend = *dynamic_cast<net::backend::tcp*>(mm.backend("tcp"));
-      auto source = sys.spawn(ping_actor, cfg.num_remote_nodes, cfg.iterations);
-      mm.publish(source, "source");
+      mm.publish(src, "source");
       for (size_t i = 0; i < cfg.num_remote_nodes; ++i) {
         auto p = *net::make_stream_socket_pair();
         auto sink_id = *make_uri("tcp://sink"s + to_string(i));
