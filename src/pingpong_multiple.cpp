@@ -87,8 +87,10 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
     [=](tick_atom) {
       self->delayed_send(self, seconds(1), tick_atom_v);
       // self->state.tick();
+      cout << num_heap_allocs << ", ";
+      num_heap_allocs = 0;
       if (++self->state.iterations >= iterations) {
-        // cout << endl;
+        cout << endl;
         self->state.for_each(
           [=](const auto& sink) { self->send(sink, done_atom_v); });
         self->quit();
@@ -226,7 +228,6 @@ void caf_main(actor_system& sys, const config& cfg) {
   for (auto& t : threads)
     t.join();
   cerr << endl;
-  cout << num_heap_allocs << ", ";
 } // namespace
 
 } // namespace
