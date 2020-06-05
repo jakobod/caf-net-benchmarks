@@ -5,33 +5,19 @@ require(gridExtra)
 
 source("evaluation/human_readable.R")
 
-pingpong_net_master <- read.csv("evaluation/data/pingpong-net-master.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
-pingpong_net_master$avg <- rowMeans(pingpong_net_master[,2:11])
-pingpong_net_master$sdev <- apply(pingpong_net_master[,2:11], 1, sd)
-pingpong_net_master$proto <- '1 net - master'
+streaming_net_master <- read.csv("evaluation/data/streaming-net-master.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+streaming_net_master$avg <- rowMeans(streaming_net_master[,2:11])
+streaming_net_master$sdev <- apply(streaming_net_master[,2:11], 1, sd)
+streaming_net_master$proto <- '1 net - master'
 
-pingpong_net_actor_proxy <- read.csv("evaluation/data/pingpong-net-actor-proxy.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
-pingpong_net_actor_proxy$avg <- rowMeans(pingpong_net_actor_proxy[,2:11])
-pingpong_net_actor_proxy$sdev <- apply(pingpong_net_actor_proxy[,2:11], 1, sd)
-pingpong_net_actor_proxy$proto <- '2 net - actor-proxy'
+streaming_io <- read.csv("evaluation/data/streaming-io.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+streaming_io$avg <- rowMeans(streaming_io[,2:11])
+streaming_io$sdev <- apply(streaming_io[,2:11], 1, sd)
+streaming_io$proto <- '2 io'
 
-pingpong_net_workers <- read.csv("evaluation/data/pingpong-net-workers.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
-pingpong_net_workers$avg <- rowMeans(pingpong_net_workers[,2:11])
-pingpong_net_workers$sdev <- apply(pingpong_net_workers[,2:11], 1, sd)
-pingpong_net_workers$proto <- '3 net - workers'
-
-pingpong_io <- read.csv("evaluation/data/pingpong-io.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
-pingpong_io$avg <- rowMeans(pingpong_io[,2:11])
-pingpong_io$sdev <- apply(pingpong_io[,2:11], 1, sd)
-pingpong_io$proto <- '4 io'
-
-ppdf <- rbind(pingpong_net_master)
-ppdf <- rbind(ppdf, pingpong_net_actor_proxy)
-ppdf <- rbind(ppdf, pingpong_net_workers)
-ppdf <- rbind(ppdf, pingpong_io)
+ppdf <- rbind(streaming_net_master, streaming_io)
 ppdf$upper <- ppdf$avg + ppdf$sdev
 ppdf$lower <- ppdf$avg - ppdf$sdev
-
 
 pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
   geom_line() + # size=0.8) +
@@ -43,8 +29,8 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
     ),
     width=0.2
   ) +
-  scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x), labels = trans_format("log10", math_format(10^.x))) +
-  scale_y_continuous(labels = human_numbers, limits=c(0,170000), breaks=seq(0, 170000, 25000)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_x_continuous(breaks=seq(1, 32, 1)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_y_continuous(labels = human_numbers, limits=c(12000000,36000000), breaks=seq(12000000, 36000000, 1000000)) + # expand=c(0, 0), limits=c(0, 10)
   theme_bw() +
   theme(
     legend.title=element_blank(),
@@ -60,12 +46,12 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
     strip.text.x=element_blank()
   ) +
   scale_color_brewer(type="qual", palette=6) +
-  ggtitle("Pingpong") +
-  labs(x="simultaneous ping_messages [#]", y="throughput [pongs/s]")
+  ggtitle("Streaming") +
+  labs(x="remote nodes [#]", y="throughput [messages/s]")
 
-tikz(file="figs/pingpong.tikz", sanitize=TRUE, width=3.4, height=2.3)
+tikz(file="figs/streaming.tikz", sanitize=TRUE, width=3.4, height=2.3)
 pp_plot
 dev.off()
 
-ggsave("figs/pingpong-with-io.pdf", plot=pp_plot, width=5, height=3)
+ggsave("figs/streaming.pdf", plot=pp_plot, width=8, height=5)
 

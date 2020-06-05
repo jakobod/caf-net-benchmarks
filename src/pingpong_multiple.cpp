@@ -219,7 +219,6 @@ void caf_main(actor_system& sys, const config& cfg) {
   for (auto& t : threads)
     t.join();
   cerr << endl;
-  cout << endl;
 } // namespace
 
 } // namespace
