@@ -50,8 +50,5 @@ macro(add_target name)
 endmacro()
 
 add_target(simple_streaming)
-add_target(pingpong)
 add_target(pingpong_multiple)
 add_target(blank_streaming)
-add_target(benchmark_client)
-add_target(benchmark_server)

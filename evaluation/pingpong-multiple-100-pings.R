@@ -5,17 +5,17 @@ require(gridExtra)
 
 source("evaluation/human_readable.R")
 
-pingpong_net_master <- read.csv("evaluation/data/pingpong-multiple-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+pingpong_net_master <- read.csv("evaluation/data/pingpong-multiple-100-pings-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 pingpong_net_master$avg <- rowMeans(pingpong_net_master[,2:11])
 pingpong_net_master$sdev <- apply(pingpong_net_master[,2:11], 1, sd)
 pingpong_net_master$proto <- '1 net - master'
 
-pingpong_net_proxy <- read.csv("evaluation/data/pingpong-multiple-net-proxy.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+pingpong_net_proxy <- read.csv("evaluation/data/pingpong-multiple-100-pings-net-proxy.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 pingpong_net_proxy$avg <- rowMeans(pingpong_net_proxy[,2:11])
 pingpong_net_proxy$sdev <- apply(pingpong_net_proxy[,2:11], 1, sd)
-pingpong_net_proxy$proto <- '2 - proxy'
+pingpong_net_proxy$proto <- '2 net - proxy'
 
-pingpong_io <- read.csv("evaluation/data/pingpong-multiple-io.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+pingpong_io <- read.csv("evaluation/data/pingpong-multiple-100-pings-io.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 pingpong_io$avg <- rowMeans(pingpong_io[,2:11])
 pingpong_io$sdev <- apply(pingpong_io[,2:11], 1, sd)
 pingpong_io$proto <- '3 - io'
@@ -36,7 +36,7 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
     width=0.5
   ) +
   scale_x_continuous(breaks=seq(1, 32, 1)) + # expand=c(0, 0), limits=c(0, 10)
-  scale_y_continuous(labels = human_numbers, limits=c(0,100000), breaks=seq(0, 100000, 10000)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_y_continuous(labels = human_numbers, limits=c(0,300000), breaks=seq(0, 300000, 25000)) + # expand=c(0, 0), limits=c(0, 10)
   theme_bw() +
   theme(
     legend.title=element_blank(),
@@ -52,12 +52,12 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
     strip.text.x=element_blank()
   ) +
   scale_color_brewer(type="qual", palette=6) +
-  ggtitle("Pingpong multiple remote nodes 1 Ping") +
+  ggtitle("Pingpong multiple remote nodes 100 Pings") +
   labs(x="remote nodes [#]", y="throughput [pongs/s]")
 
-tikz(file="figs/pingpong-multiple-1.tikz", sanitize=TRUE, width=3.4, height=2.3)
+tikz(file="figs/pingpong-multiple-100.tikz", sanitize=TRUE, width=3.4, height=2.3)
 pp_plot
 dev.off()
 
-ggsave("figs/pingpong-multiple-1.pdf", plot=pp_plot, width=8, height=5)
+ggsave("figs/pingpong-multiple-100.pdf", plot=pp_plot, width=8, height=5)
 
