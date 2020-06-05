@@ -20,6 +20,7 @@
 #include <chrono>
 #include <functional>
 #include <iostream>
+#include <stdlib.h>
 
 #include "caf/actor_system_config.hpp"
 #include "caf/all.hpp"
@@ -39,6 +40,13 @@
 using namespace std;
 using namespace caf;
 using namespace std::chrono;
+
+int num_heap_allocs = 0;
+
+void* operator new(size_t size) {
+  num_heap_allocs++;
+  return malloc(size);
+}
 
 namespace {
 
@@ -78,9 +86,9 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
     },
     [=](tick_atom) {
       self->delayed_send(self, seconds(1), tick_atom_v);
-      self->state.tick();
+      // self->state.tick();
       if (++self->state.iterations >= iterations) {
-        cout << endl;
+        // cout << endl;
         self->state.for_each(
           [=](const auto& sink) { self->send(sink, done_atom_v); });
         self->quit();
@@ -181,7 +189,6 @@ void caf_main(actor_system& sys, const config& cfg) {
   vector<thread> threads;
   auto src = sys.spawn(ping_actor, cfg.num_remote_nodes, cfg.iterations,
                        cfg.num_pings);
-  cout << cfg.num_remote_nodes << ", ";
   switch (convert(cfg.mode)) {
     case bench_mode::io: {
       cerr << "run in 'ioBench' mode" << endl;
@@ -219,6 +226,7 @@ void caf_main(actor_system& sys, const config& cfg) {
   for (auto& t : threads)
     t.join();
   cerr << endl;
+  cout << num_heap_allocs << ", ";
 } // namespace
 
 } // namespace
