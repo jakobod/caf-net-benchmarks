@@ -121,7 +121,7 @@ behavior sink_actor(stateful_actor<sink_state>* self, size_t iterations,
       self->delayed_send(self, chrono::seconds(1), tick_atom_v);
       self->send(accumulator, self->state.count, self);
       self->state.count = 0;
-      if (self->state.tick_count++ >= iterations) {
+      if (++self->state.tick_count >= iterations) {
         self->send(accumulator, done_atom_v);
         self->quit();
       }
@@ -168,9 +168,7 @@ struct config : actor_system_config {
   uri earth_id;
 };
 
-/*
-void io_run_sink(net::stream_socket, net::stream_socket second,
-                 size_t iterations) {
+void io_run_source(net::stream_socket sock, uint16_t port) {
   actor_system_config cfg;
   cfg.load<io::middleman>();
   cfg.parse(0, nullptr);
@@ -179,21 +177,21 @@ void io_run_sink(net::stream_socket, net::stream_socket second,
   using io::network::scribe_impl;
   auto& mm = sys.middleman();
   auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
-  io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, second.id);
+  io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, sock.id);
   auto bb = mm.named_broker<io::basp_broker>("BASP");
   scoped_actor self{sys};
-  self->request(bb, infinite, connect_atom_v, move(scribe), uint16_t{8080})
+  self->request(bb, infinite, connect_atom_v, move(scribe), port)
     .receive(
       [&](node_id&, strong_actor_ptr& ptr, set<string>&) {
         if (ptr == nullptr) {
           cerr << "ERROR: could not get a handle to remote source\n";
           return;
         }
-        sys.spawn(sink, actor_cast<actor>(ptr), self, iterations);
+        auto source = sys.spawn(source_actor);
+        self->send(source, start_atom_v, actor_cast<actor>(ptr));
       },
       [&](error& err) { cerr << "ERROR: " << to_string(err) << endl; });
-  self->receive([](done_atom) {});
-}*/
+}
 
 void net_run_source(net::stream_socket sock, size_t id) {
   cerr << "id = " << id << endl;
@@ -224,30 +222,25 @@ void net_run_source(net::stream_socket sock, size_t id) {
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
+  cout << cfg.num_remote_nodes << ", ";
   vector<thread> threads;
   auto accumulator = sys.spawn(accumulator_actor, cfg.num_remote_nodes);
   switch (convert(cfg.mode)) {
-    case bench_mode::io: { /*
-       cerr << "run in 'ioBench' mode" << endl;
-       auto sockets = *make_connected_tcp_socket_pair();
-       cerr << "sockets: " << sockets.first.id << ", " << sockets.second.id
-            << endl;
-       auto src = sys.spawn(source, false, cfg.iterations);
-       using io::network::scribe_impl;
-       auto& mm = sys.middleman();
-       auto& mpx =
-       dynamic_cast<io::network::default_multiplexer&>(mm.backend());
-       io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, sockets.first.id);
-       auto bb = mm.named_broker<io::basp_broker>("BASP");
-       anon_send(bb, publish_atom_v, move(scribe), uint16_t{8080},
-                 actor_cast<strong_actor_ptr>(src), set<string>{});
-       auto iterations = cfg.iterations;
-       auto f = [sockets, iterations] {
-         io_run_sink(sockets.first, sockets.second, iterations);
-       };
-       thread t{f};
-       t.join();
-       anon_send_exit(src, exit_reason::user_shutdown);*/
+    case bench_mode::io: {
+      cerr << "run in 'ioBench' mode" << endl;
+      using io::network::scribe_impl;
+      auto& mm = sys.middleman();
+      auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
+      auto bb = mm.named_broker<io::basp_broker>("BASP");
+      for (size_t port = 0; port < cfg.num_remote_nodes; ++port) {
+        auto p = *net::make_stream_socket_pair();
+        io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, p.first.id);
+        auto sink = sys.spawn(sink_actor, cfg.iterations, accumulator);
+        anon_send(bb, publish_atom_v, move(scribe), uint16_t(8080 + port),
+                  actor_cast<strong_actor_ptr>(sink), set<string>{});
+        auto f = [=]() { io_run_source(p.second, port); };
+        threads.emplace_back(f);
+      }
       break;
     }
     case bench_mode::net: {
@@ -265,13 +258,13 @@ void caf_main(actor_system& sys, const config& cfg) {
         auto f = [=]() { net_run_source(sockets.second, node); };
         threads.emplace_back(f);
       }
-      for (auto& thread : threads)
-        thread.join();
       break;
     }
     default:
       cerr << "mode is invalid: " << cfg.mode << endl;
   }
+  for (auto& thread : threads)
+    thread.join();
 }
 
 } // namespace
