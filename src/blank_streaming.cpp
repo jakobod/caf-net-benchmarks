@@ -17,7 +17,9 @@
  * http://www.boost.org/LICENSE_1_0.txt.                                      *
  ******************************************************************************/
 
+#include <chrono>
 #include <iostream>
+#include <vector>
 
 #include "caf/actor_system_config.hpp"
 #include "caf/all.hpp"

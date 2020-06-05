@@ -140,7 +140,6 @@ while [ $# -ne 0 ]; do
     --dev-mode)
       CMakeBuildType='Debug'
       append_cache_entry CAF_INC_SANITIZERS STRING 'address,undefined'
-      set_build_flag utility-targets ON
       ;;
    --enable-*)
       set_build_flag $optarg ON

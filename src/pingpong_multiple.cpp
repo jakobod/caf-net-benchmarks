@@ -20,6 +20,7 @@
 #include <chrono>
 #include <functional>
 #include <iostream>
+#include <vector>
 
 #include "caf/actor_system_config.hpp"
 #include "caf/all.hpp"
@@ -40,18 +41,28 @@ using namespace std;
 using namespace caf;
 using namespace std::chrono;
 
+using timestamp_vec = vector<chrono::microseconds>;
+
 namespace {
 
 struct tick_state {
   void tick() {
-    cout << count << ", ";
+    // cout << count << ", ";
     count = 0;
+  }
+
+  void timestamp() {
+    using namespace std::chrono;
+    auto ts = duration_cast<microseconds>(
+      system_clock::now().time_since_epoch());
+    timestamps.push_back(ts);
   }
 
   vector<actor> sinks;
   size_t count = 0;
   size_t iterations = 0;
   size_t arrived = 0;
+  timestamp_vec timestamps;
 
   template <class Func>
   void for_each(Func f) {
@@ -61,7 +72,7 @@ struct tick_state {
 };
 
 behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
-                    size_t iterations, size_t num_pings) {
+                    size_t iterations, size_t num_pings, actor listener) {
   return {
     [=](hello_atom, const actor& sink) {
       self->state.sinks.push_back(sink);
@@ -71,8 +82,10 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
     },
     [=](start_atom) {
       self->state.for_each([=](const auto& sink) {
-        for (size_t i = 0; i < num_pings; ++i)
+        for (size_t i = 0; i < num_pings; ++i) {
           self->send(sink, ping_atom_v);
+          self->state.timestamp();
+        }
       });
       self->delayed_send(self, seconds(1), tick_atom_v);
     },
@@ -81,12 +94,16 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
       self->state.tick();
       if (++self->state.iterations >= iterations) {
         cout << endl;
-        self->state.for_each(
-          [=](const auto& sink) { self->send(sink, done_atom_v); });
+        self->state.for_each([=](const auto& sink) {
+          self->state.timestamp();
+          self->send(sink, done_atom_v);
+        });
+        self->send(listener, self->state.timestamps);
         self->quit();
       }
     },
     [=](pong_atom) {
+      self->state.timestamp();
       self->state.count++;
       return ping_atom_v;
     },
@@ -177,10 +194,34 @@ void net_run_node(uri id, net::stream_socket sock) {
   self->await_all_other_actors_done();
 }
 
+void print_len(timestamp_vec& v) {
+  cout << v.size() << endl;
+}
+
+void print_start(size_t num_values) {
+  cout << "which, ";
+  for (size_t i = 0; i < num_values; ++i)
+    cout << "value" << to_string(i) << ", ";
+  cout << endl;
+}
+
+void print_vec(int num, timestamp_vec& v, size_t offset = 0) {
+  cout << num << ", ";
+  for (const auto& t : v)
+    cout << t.count() - offset << ",";
+  cout << endl;
+}
+
+timestamp_vec strip_vec(timestamp_vec& vec, size_t begin_offset,
+                        size_t end_offset) {
+  return {vec.begin() + begin_offset, vec.end() - end_offset};
+}
+
 void caf_main(actor_system& sys, const config& cfg) {
+  scoped_actor self{sys};
   vector<thread> threads;
   auto src = sys.spawn(ping_actor, cfg.num_remote_nodes, cfg.iterations,
-                       cfg.num_pings);
+                       cfg.num_pings, self);
   cout << cfg.num_remote_nodes << ", ";
   switch (convert(cfg.mode)) {
     case bench_mode::io: {
@@ -211,13 +252,57 @@ void caf_main(actor_system& sys, const config& cfg) {
         auto f = [=]() { net_run_node(sink_id, p.second); };
         threads.emplace_back(f);
       }
+      for (auto& t : threads)
+        t.join();
+      timestamp_vec ts_actor;
+      self->receive([&](timestamp_vec& ts) { ts_actor = move(ts); });
+      auto ts = mm.get_timestamps();
+      auto offset = ts.trans_enqueue_.at(0).count();
+
+      print_len(ts_actor);
+      print_len(ts.ep_enqueue_);
+      print_len(ts.ep_dequeue_);
+      print_len(ts.trans_enqueue_);
+
+      cout << endl;
+
+      // First 5 calls are basp handshake.
+      ts_actor = strip_vec(ts_actor, 1, 1);
+      ts.ep_enqueue_ = strip_vec(ts.ep_enqueue_, 1, 1);
+      ts.ep_dequeue_ = strip_vec(ts.ep_dequeue_, 1, 1);
+      // only release mode!!
+      ts.trans_enqueue_ = strip_vec(ts.trans_enqueue_, 5, 1);
+      // debug
+      // ts.trans_enqueue_ = strip_vec(ts.trans_enqueue_, 5, 0);
+
+      print_len(ts_actor);
+      print_len(ts.ep_enqueue_);
+      print_len(ts.ep_dequeue_);
+      print_len(ts.trans_enqueue_);
+
+      /*print_vec(1, ts_actor);
+      print_vec(2, ts.ep_enqueue_);
+      print_vec(3, ts.ep_dequeue_);
+      print_vec(4, ts.trans_enqueue_);*/
+
+      timestamp_vec t1; // actor -> ep_manager
+      timestamp_vec t2; // enqueue ep_manager -> dequeue manager
+      timestamp_vec t3; // dequeue ep_manager -> enqueue trans
+      for (size_t i = 0; i < ts.ep_enqueue_.size(); ++i) {
+        t1.push_back(ts.ep_enqueue_.at(i) - ts_actor.at(i));
+        t2.push_back(ts.ep_dequeue_.at(i) - ts.ep_enqueue_.at(i));
+        t3.push_back(ts.trans_enqueue_.at(i) - ts.ep_dequeue_.at(i));
+      }
+      print_start(t1.size());
+      print_vec(1, t1);
+      print_vec(2, t2);
+      print_vec(3, t3);
       break;
     }
     default:
       cerr << "mode is invalid: " << cfg.mode << endl;
   }
-  for (auto& t : threads)
-    t.join();
+
   cerr << endl;
 } // namespace
 
