@@ -86,7 +86,8 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
         }
       });
       self->delayed_send(self, seconds(1), tick_atom_v);
-    },
+    } // namespace
+    ,
     [=](tick_atom) {
       self->delayed_send(self, seconds(1), tick_atom_v);
       self->state.tick();
@@ -197,9 +198,9 @@ void caf_main(actor_system& sys, const config& cfg) {
   vector<thread> threads;
   auto src = sys.spawn(ping_actor, cfg.num_remote_nodes, cfg.iterations,
                        cfg.num_pings, self);
-  cout << cfg.num_remote_nodes << ", ";
   switch (convert(cfg.mode)) {
     case bench_mode::io: {
+      auto offset = system_clock::now().time_since_epoch().count();
       cerr << "run in 'ioBench' mode" << endl;
       using io::network::scribe_impl;
       auto& mm = sys.middleman();
@@ -212,6 +213,31 @@ void caf_main(actor_system& sys, const config& cfg) {
                   actor_cast<strong_actor_ptr>(src), set<string>{});
         auto f = [=]() { io_run_node(port, p.second.id); };
         threads.emplace_back(f);
+        for (auto& t : threads)
+          t.join();
+
+        timestamp_vec actor_ts;
+        timestamp_vec dequeue_ts;
+        timestamp_vec enqueue_ts;
+        self->receive([&](timestamp_vec& ts) { actor_ts = move(ts); });
+        self->send(bb, get_timestamps_atom_v);
+        self->receive([&](timestamp_vec dequeue, timestamp_vec enqueue) {
+          dequeue_ts = dequeue;
+          enqueue_ts = enqueue;
+        });
+
+        actor_ts = strip_vec(actor_ts, 0, 1);
+        dequeue_ts = strip_vec(dequeue_ts, 1, 1);
+        enqueue_ts = strip_vec(enqueue_ts, 3, 0);
+        timestamp_vec t1; // actor -> dequeue broker
+        timestamp_vec t2; // dequeue broker -> enqueue stream
+        for (size_t i = 0; i < actor_ts.size(); ++i) {
+          t1.push_back(dequeue_ts.at(i) - actor_ts.at(i));
+          t2.push_back(enqueue_ts.at(i) - dequeue_ts.at(i));
+        }
+        init_file(t1.size());
+        print_vec(1, t1);
+        print_vec(2, t2);
       }
       break;
     }
@@ -233,14 +259,13 @@ void caf_main(actor_system& sys, const config& cfg) {
       self->receive([&](timestamp_vec& ts) { ts_actor = move(ts); });
       auto ts = mm.get_timestamps();
       auto offset = ts.trans_enqueue_.at(0).count();
-
       cout << endl;
       // First 5 calls are basp handshake.
       ts_actor = strip_vec(ts_actor, 1, 1);
       ts.ep_enqueue_ = strip_vec(ts.ep_enqueue_, 1, 1);
       ts.ep_dequeue_ = strip_vec(ts.ep_dequeue_, 1, 1);
       // only release mode!!
-      ts.trans_enqueue_ = strip_vec(ts.trans_enqueue_, 5, 1);
+      ts.trans_enqueue_ = strip_vec(ts.trans_enqueue_, 5, 0);
       // debug
       // ts.trans_enqueue_ = strip_vec(ts.trans_enqueue_, 5, 0);
 
@@ -252,7 +277,7 @@ void caf_main(actor_system& sys, const config& cfg) {
         t2.push_back(ts.ep_dequeue_.at(i) - ts.ep_enqueue_.at(i));
         t3.push_back(ts.trans_enqueue_.at(i) - ts.ep_dequeue_.at(i));
       }
-
+      init_file(t1.size());
       print_vec(1, t1);
       print_vec(2, t2);
       print_vec(3, t3);

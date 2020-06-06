@@ -39,5 +39,9 @@ make_connected_tcp_socket_pair();
 
 void print_vec(int num, timestamp_vec& v, size_t offset = 0);
 
+void print_len(timestamp_vec& v);
+
+void init_file(size_t len);
+
 timestamp_vec strip_vec(timestamp_vec& vec, size_t begin_offset,
                         size_t end_offset);

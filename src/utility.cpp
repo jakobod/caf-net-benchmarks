@@ -28,6 +28,8 @@
 #include "caf/net/tcp_stream_socket.hpp"
 #include "caf/uri.hpp"
 
+using namespace std::literals::string_literals;
+
 bench_mode convert(const std::string& str) {
   if (str == "netBench")
     return bench_mode::net;
@@ -78,7 +80,18 @@ void print_vec(int num, timestamp_vec& v, size_t offset) {
   std::cout << std::endl;
 }
 
+void print_len(timestamp_vec& v) {
+  std::cout << v.size() << std::endl;
+}
+
 timestamp_vec strip_vec(timestamp_vec& vec, size_t begin_offset,
                         size_t end_offset) {
   return {vec.begin() + begin_offset, vec.end() - end_offset};
+}
+
+void init_file(size_t len) {
+  std::cout << "what, ";
+  for (size_t i = 0; i < len; ++i)
+    std::cout << "value"s + std::to_string(i) << ", ";
+  std::cout << std::endl;
 }

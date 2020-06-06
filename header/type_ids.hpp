@@ -31,7 +31,6 @@ CAF_ADD_TYPE_ID(caf_net_benchmark, (std::vector<uint64_t>) )
 CAF_ADD_TYPE_ID(caf_net_benchmark, (caf::stream<uint64_t>) )
 CAF_ADD_TYPE_ID(caf_net_benchmark, (caf::stream<std::vector<uint64_t>>) )
 CAF_ADD_TYPE_ID(caf_net_benchmark, (std::vector<std::vector<uint64_t>>) )
-CAF_ADD_TYPE_ID(caf_net_benchmark, (std::vector<std::chrono::microseconds>) )
 
 CAF_ADD_ATOM(caf_net_benchmark, start_atom)
 CAF_ADD_ATOM(caf_net_benchmark, stop_atom)
