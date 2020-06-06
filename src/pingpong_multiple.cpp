@@ -17,6 +17,7 @@
  * http://www.boost.org/LICENSE_1_0.txt.                                      *
  ******************************************************************************/
 
+#include <atomic>
 #include <chrono>
 #include <functional>
 #include <iostream>
@@ -31,6 +32,7 @@
 #include "caf/io/scribe.hpp"
 #include "caf/net/backend/tcp.hpp"
 #include "caf/net/basp/ec.hpp"
+#include "caf/net/defaults.hpp"
 #include "caf/net/endpoint_manager.hpp"
 #include "caf/net/middleman.hpp"
 #include "caf/uri.hpp"
@@ -41,7 +43,7 @@ using namespace std;
 using namespace caf;
 using namespace std::chrono;
 
-int num_heap_allocs = 0;
+extern atomic<size_t> num_heap_allocs;
 
 void* operator new(size_t size) {
   num_heap_allocs++;

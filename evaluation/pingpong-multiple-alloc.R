@@ -5,12 +5,12 @@ require(gridExtra)
 
 source("evaluation/human_readable.R")
 
-pingpong_net_master <- read.csv("evaluation/data/pingpong-multiple-1-pings-alloc-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+pingpong_net_master <- read.csv("evaluation/data/pingpong-alloc-1-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 pingpong_net_master$avg <- rowMeans(pingpong_net_master[,2:11])
 pingpong_net_master$sdev <- apply(pingpong_net_master[,2:11], 1, sd)
 pingpong_net_master$proto <- '1 net - master'
 
-pingpong_io <- read.csv("evaluation/data/pingpong-multiple-1-pings-alloc-io.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+pingpong_io <- read.csv("evaluation/data/pingpong-alloc-1-io.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 pingpong_io$avg <- rowMeans(pingpong_io[,2:11])
 pingpong_io$sdev <- apply(pingpong_io[,2:11], 1, sd)
 pingpong_io$proto <- '2 - io'
@@ -31,7 +31,7 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
     width=0.5
   ) +
   scale_x_continuous(breaks=seq(1, 32, 1)) + # expand=c(0, 0), limits=c(0, 10)
-  scale_y_continuous(labels = human_numbers, limits=c(0,2600000), breaks=seq(0, 2500000, 250000)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_y_continuous(labels = human_numbers, limits=c(0,60), breaks=seq(0, 60, 10)) + # expand=c(0, 0), limits=c(0, 10)
   theme_bw() +
   theme(
     legend.title=element_blank(),
@@ -47,12 +47,12 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
     strip.text.x=element_blank()
   ) +
   scale_color_brewer(type="qual", palette=6) +
-  ggtitle("Pingpong multiple remote nodes 1 Ping") +
-  labs(x="remote nodes [#]", y="allocations [alloc/s]")
+  ggtitle("Pingpong 1 Ping") +
+  labs(x="remote nodes [#]", y="allocations per message [alloc/msg/s]")
 
-tikz(file="figs/pingpong-multiple-1-alloc.tikz", sanitize=TRUE, width=3.4, height=2.3)
+tikz(file="figs/pingpong-alloc-1.tikz", sanitize=TRUE, width=3.4, height=2.3)
 pp_plot
 dev.off()
 
-ggsave("figs/pingpong-multiple-1-alloc.pdf", plot=pp_plot, width=8, height=5)
+ggsave("figs/pingpong-alloc-1.pdf", plot=pp_plot, width=8, height=5)
 

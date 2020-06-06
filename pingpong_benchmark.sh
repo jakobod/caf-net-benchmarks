@@ -25,8 +25,8 @@ for pings in 1; do #10 100; do
     echo "starting netBench-${num_nodes}"
     printf "${num_nodes}, " >> ${net_file_name}.out
     ./release/pingpong_multiple -mnetBench -n${num_nodes} -p${pings} >> ${net_file_name}.out 2> ${net_file_name}.err
-    echo "" >> ${net_file_name}.out
   done;
+  echo ""
 done;
 
 echo ""
@@ -39,7 +39,6 @@ for pings in 1; do #10 100; do
     echo "starting ioBench-${num_nodes}"
     printf "${num_nodes}, " >> ${io_file_name}.out
     ./release/pingpong_multiple -mioBench -n${num_nodes} -p${pings}>> ${io_file_name}.out 2> ${io_file_name}.err
-    echo "" >> ${io_file_name}.out
   done;
   echo ""
 done;
