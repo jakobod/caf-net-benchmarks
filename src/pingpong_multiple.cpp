@@ -52,8 +52,9 @@ namespace {
 
 struct tick_state {
   void tick() {
-    cout << count << ", ";
+    cout << num_heap_allocs / count << ", ";
     count = 0;
+    num_heap_allocs = 0;
   }
 
   vector<actor> sinks;
@@ -86,9 +87,7 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
     },
     [=](tick_atom) {
       self->delayed_send(self, seconds(1), tick_atom_v);
-      // self->state.tick();
-      cout << num_heap_allocs << ", ";
-      num_heap_allocs = 0;
+      self->state.tick();
       if (++self->state.iterations >= iterations) {
         cout << endl;
         self->state.for_each(
