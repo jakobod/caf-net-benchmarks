@@ -18,15 +18,17 @@
 
 #pragma once
 
-#include <iostream>
-#include <string>
-#include <vector>
+#include <chrono>
 
 #include "caf/expected.hpp"
 #include "caf/fwd.hpp"
 #include "caf/net/fwd.hpp"
 
+// -- type defines -------------------------------------------------------------
+
 using socket_pair = std::pair<caf::net::stream_socket, caf::net::stream_socket>;
+
+using timestamp_vec = std::vector<std::chrono::microseconds>;
 
 enum class bench_mode { net, io, local, invalid };
 
@@ -35,18 +37,7 @@ bench_mode convert(const std::string& str);
 caf::expected<std::pair<caf::net::stream_socket, caf::net::stream_socket>>
 make_connected_tcp_socket_pair();
 
-template <class T>
-void print_vector(const std::string& name, const std::vector<T>& vec) {
-  using namespace std;
-  cout << name << ": ";
-  for (const auto& v : vec) {
-    auto val = v.count();
-    cout << val << ", ";
-  }
-  cout << endl;
-}
+void print_vec(int num, timestamp_vec& v, size_t offset = 0);
 
-template <class T>
-void erase(std::vector<T>& vec, size_t begin, size_t end) {
-  vec.erase(vec.begin() + begin, vec.begin() + end);
-}
+timestamp_vec strip_vec(timestamp_vec& vec, size_t begin_offset,
+                        size_t end_offset);

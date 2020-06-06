@@ -18,9 +18,9 @@
 
 #include "utility.hpp"
 
+#include <iostream>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "caf/expected.hpp"
 #include "caf/net/stream_socket.hpp"
@@ -67,4 +67,18 @@ make_connected_tcp_socket_pair() {
     return make_pair(sock1, *res);
   else
     return res.error();
+}
+
+// -- Vector stuff for easy handling -------------------------------------------
+
+void print_vec(int num, timestamp_vec& v, size_t offset) {
+  std::cout << num << ", ";
+  for (const auto& t : v)
+    std::cout << t.count() - offset << ",";
+  std::cout << std::endl;
+}
+
+timestamp_vec strip_vec(timestamp_vec& vec, size_t begin_offset,
+                        size_t end_offset) {
+  return {vec.begin() + begin_offset, vec.end() - end_offset};
 }

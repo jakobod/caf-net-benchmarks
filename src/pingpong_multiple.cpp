@@ -41,8 +41,6 @@ using namespace std;
 using namespace caf;
 using namespace std::chrono;
 
-using timestamp_vec = vector<chrono::microseconds>;
-
 namespace {
 
 struct tick_state {
@@ -194,29 +192,6 @@ void net_run_node(uri id, net::stream_socket sock) {
   self->await_all_other_actors_done();
 }
 
-void print_len(timestamp_vec& v) {
-  cout << v.size() << endl;
-}
-
-void print_start(size_t num_values) {
-  cout << "which, ";
-  for (size_t i = 0; i < num_values; ++i)
-    cout << "value" << to_string(i) << ", ";
-  cout << endl;
-}
-
-void print_vec(int num, timestamp_vec& v, size_t offset = 0) {
-  cout << num << ", ";
-  for (const auto& t : v)
-    cout << t.count() - offset << ",";
-  cout << endl;
-}
-
-timestamp_vec strip_vec(timestamp_vec& vec, size_t begin_offset,
-                        size_t end_offset) {
-  return {vec.begin() + begin_offset, vec.end() - end_offset};
-}
-
 void caf_main(actor_system& sys, const config& cfg) {
   scoped_actor self{sys};
   vector<thread> threads;
@@ -259,13 +234,7 @@ void caf_main(actor_system& sys, const config& cfg) {
       auto ts = mm.get_timestamps();
       auto offset = ts.trans_enqueue_.at(0).count();
 
-      print_len(ts_actor);
-      print_len(ts.ep_enqueue_);
-      print_len(ts.ep_dequeue_);
-      print_len(ts.trans_enqueue_);
-
       cout << endl;
-
       // First 5 calls are basp handshake.
       ts_actor = strip_vec(ts_actor, 1, 1);
       ts.ep_enqueue_ = strip_vec(ts.ep_enqueue_, 1, 1);
@@ -275,16 +244,6 @@ void caf_main(actor_system& sys, const config& cfg) {
       // debug
       // ts.trans_enqueue_ = strip_vec(ts.trans_enqueue_, 5, 0);
 
-      print_len(ts_actor);
-      print_len(ts.ep_enqueue_);
-      print_len(ts.ep_dequeue_);
-      print_len(ts.trans_enqueue_);
-
-      /*print_vec(1, ts_actor);
-      print_vec(2, ts.ep_enqueue_);
-      print_vec(3, ts.ep_dequeue_);
-      print_vec(4, ts.trans_enqueue_);*/
-
       timestamp_vec t1; // actor -> ep_manager
       timestamp_vec t2; // enqueue ep_manager -> dequeue manager
       timestamp_vec t3; // dequeue ep_manager -> enqueue trans
@@ -293,7 +252,7 @@ void caf_main(actor_system& sys, const config& cfg) {
         t2.push_back(ts.ep_dequeue_.at(i) - ts.ep_enqueue_.at(i));
         t3.push_back(ts.trans_enqueue_.at(i) - ts.ep_dequeue_.at(i));
       }
-      print_start(t1.size());
+
       print_vec(1, t1);
       print_vec(2, t2);
       print_vec(3, t3);
@@ -304,7 +263,7 @@ void caf_main(actor_system& sys, const config& cfg) {
   }
 
   cerr << endl;
-} // namespace
+}
 
 } // namespace
 
