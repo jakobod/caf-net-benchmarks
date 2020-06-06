@@ -17,9 +17,9 @@ function init_caf_application_ini() {
 # set maximum number of threads for each actor-system.
 init_caf_application_ini
 
-for pings in 1 10 100; do
+for pings in 1; do #10 100; do
   echo "------------------------ ${pings} pings ------------------------"
-  net_file_name="${output_folder}/pingpong-alloc-${pings}-net"
+  net_file_name="${output_folder}/pingpong-${pings}-net"
   init_file ${net_file_name}
   for num_nodes in {1..32..1}; do
     echo "starting netBench-${num_nodes}"
@@ -31,9 +31,9 @@ done;
 
 echo ""
 
-for pings in 1 10 100; do
+for pings in 1; do #10 100; do
   echo "------------------------ ${pings} pings ------------------------"
-  io_file_name="${output_folder}/pingpong-alloc-${pings}-io"
+  io_file_name="${output_folder}/pingpong-${pings}-io"
   init_file ${io_file_name}
   for num_nodes in {1..32..1}; do
     echo "starting ioBench-${num_nodes}"
