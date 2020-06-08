@@ -284,34 +284,44 @@ void caf_main(actor_system& sys, const config& cfg) {
       auto ts = mm.get_timestamps();
       cout << endl;
 
-      /*if (!(ts_actor.size() == ts.ep_enqueue_.size() == ts.ep_dequeue_.size()
-            == ts.trans_enqueue_.size()))
-        abort();*/
-
       /*      print_len(ts_actor);
-      print_len(ts.ep_enqueue_);
-      print_len(ts.ep_dequeue_);
-      print_len(ts.trans_enqueue_);
-
-      print_vec(1, ts_actor, offset);
-      print_vec(2, ts.ep_enqueue_, offset);
-      print_vec(3, ts.ep_dequeue_, offset);
-      print_vec(4, ts.trans_enqueue_, offset);
-
-      // First 5 calls are basp handshake.
-      ts_actor = strip_vec(ts_actor, 0, 0);
-      ts.ep_enqueue_ = strip_vec(ts.ep_enqueue_, 0, 0);
-      ts.ep_dequeue_ = strip_vec(ts.ep_dequeue_, 0, 0);
-      ts.trans_enqueue_ = strip_vec(ts.trans_enqueue_, 0, 0);*/
+            print_len(ts.ep_enqueue_);
+            print_len(ts.ep_dequeue_);
+            print_len(ts.application_t1_);
+            print_len(ts.application_t2_);
+            print_len(ts.application_t3_);
+            print_len(ts.application_t4_);
+            print_len(ts.application_t5_);
+            print_len(ts.trans_enqueue_);
+      */
       timestamp_vec t1; // actor -> ep_manager
       timestamp_vec t2; // enqueue ep_manager -> dequeue manager
+      timestamp_vec t3; // enqueue ep_manager -> dequeue manager
+      timestamp_vec t4; // enqueue ep_manager -> dequeue manager
+      timestamp_vec t5; // enqueue ep_manager -> dequeue manager
+      timestamp_vec t6; // enqueue ep_manager -> dequeue manager
+      timestamp_vec t7; // enqueue ep_manager -> dequeue manager
+      timestamp_vec t8; // enqueue ep_manager -> dequeue manager
+
       for (size_t i = 0; i < ts_actor.size(); ++i) {
-        t1.push_back(ts.ep_dequeue_.at(i) - ts_actor.at(i));
-        t2.push_back(ts.trans_enqueue_.at(i) - ts.ep_dequeue_.at(i));
+        t1.push_back(ts.ep_dequeue_[i] - ts_actor[i]);
+        t2.push_back(ts.application_t1_[i] - ts.ep_dequeue_[i]);
+        t3.push_back(ts.application_t2_[i] - ts.application_t1_[i]);
+        t4.push_back(ts.application_t3_[i] - ts.application_t2_[i]);
+        t5.push_back(ts.application_t4_[i] - ts.application_t3_[i]);
+        t6.push_back(ts.application_t5_[i] - ts.application_t4_[i]);
+        t7.push_back(ts.trans_enqueue_[i] - ts.application_t5_[i]);
+        t8.push_back(ts.trans_packet_written_[i] - ts.trans_enqueue_[i]);
       }
       init_file(t1.size());
       print_vec("t1"s, t1);
       print_vec("t2"s, t2);
+      print_vec("t3"s, t3);
+      print_vec("t4"s, t4);
+      print_vec("t5"s, t5);
+      print_vec("t6"s, t6);
+      print_vec("t7"s, t7);
+      print_vec("t8"s, t8);
       break;
     }
     default:
