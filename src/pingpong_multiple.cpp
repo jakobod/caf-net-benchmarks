@@ -50,7 +50,6 @@ struct tick_state {
   }
 
   void timestamp() {
-    using namespace std::chrono;
     auto ts = duration_cast<microseconds>(
       system_clock::now().time_since_epoch());
     timestamps.push_back(ts);
@@ -62,6 +61,30 @@ struct tick_state {
   size_t arrived = 0;
   timestamp_vec timestamps;
 
+  void start_timestamps(stateful_actor<tick_state>* self, bench_mode mode) {
+    if (mode == bench_mode::net) {
+      cerr << "netBench mode" << endl;
+      self->system().network_manager().start_timestamps();
+    } else if (mode == bench_mode::io) {
+      cerr << "ioBench mode" << endl;
+      self->send(self->system().middleman().named_broker<io::basp_broker>(
+                   "BASP"),
+                 start_timestamps_atom_v);
+    }
+  }
+
+  void stop_timestamps(stateful_actor<tick_state>* self, bench_mode mode) {
+    if (mode == bench_mode::net) {
+      cerr << "netBench mode" << endl;
+      self->system().network_manager().stop_timestamps();
+    } else if (mode == bench_mode::io) {
+      cerr << "ioBench mode" << endl;
+      self->send(self->system().middleman().named_broker<io::basp_broker>(
+                   "BASP"),
+                 stop_timestamps_atom_v);
+    }
+  }
+
   template <class Func>
   void for_each(Func f) {
     for (const auto& sink : sinks)
@@ -70,40 +93,41 @@ struct tick_state {
 };
 
 behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
-                    size_t iterations, size_t num_pings, actor listener) {
+                    size_t iterations, size_t num_pings, actor listener,
+                    bench_mode mode) {
   return {
     [=](hello_atom, const actor& sink) {
       self->state.sinks.push_back(sink);
-      if (self->state.sinks.size() >= num_remote_nodes) {
+      if (self->state.sinks.size() >= num_remote_nodes)
         self->send(self, start_atom_v);
-      }
     },
     [=](start_atom) {
+      self->state.start_timestamps(self, mode);
       self->state.for_each([=](const auto& sink) {
         for (size_t i = 0; i < num_pings; ++i) {
-          self->send(sink, ping_atom_v);
           self->state.timestamp();
+          self->send(sink, ping_atom_v);
         }
       });
       self->delayed_send(self, seconds(1), tick_atom_v);
-    } // namespace
-    ,
+    },
     [=](tick_atom) {
-      self->delayed_send(self, seconds(1), tick_atom_v);
       self->state.tick();
       if (++self->state.iterations >= iterations) {
+        std::this_thread::sleep_for(seconds(1));
+        self->state.stop_timestamps(self, mode);
         cout << endl;
-        self->state.for_each([=](const auto& sink) {
-          self->state.timestamp();
-          self->send(sink, done_atom_v);
-        });
+        self->state.for_each(
+          [=](const auto& sink) { self->send(sink, done_atom_v); });
         self->send(listener, self->state.timestamps);
         self->quit();
+      } else {
+        self->delayed_send(self, seconds(1), tick_atom_v);
       }
     },
     [=](pong_atom) {
-      self->state.timestamp();
       self->state.count++;
+      self->state.timestamp();
       return ping_atom_v;
     },
   };
@@ -194,13 +218,13 @@ void net_run_node(uri id, net::stream_socket sock) {
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
+  auto offset = system_clock::now().time_since_epoch().count();
   scoped_actor self{sys};
   vector<thread> threads;
   auto src = sys.spawn(ping_actor, cfg.num_remote_nodes, cfg.iterations,
-                       cfg.num_pings, self);
+                       cfg.num_pings, self, convert(cfg.mode));
   switch (convert(cfg.mode)) {
     case bench_mode::io: {
-      auto offset = system_clock::now().time_since_epoch().count();
       cerr << "run in 'ioBench' mode" << endl;
       using io::network::scribe_impl;
       auto& mm = sys.middleman();
@@ -226,9 +250,9 @@ void caf_main(actor_system& sys, const config& cfg) {
           enqueue_ts = enqueue;
         });
 
-        actor_ts = strip_vec(actor_ts, 0, 1);
-        dequeue_ts = strip_vec(dequeue_ts, 1, 1);
-        enqueue_ts = strip_vec(enqueue_ts, 3, 0);
+        if (!(actor_ts.size() == dequeue_ts.size() == enqueue_ts.size()))
+          abort();
+
         timestamp_vec t1; // actor -> dequeue broker
         timestamp_vec t2; // dequeue broker -> enqueue stream
         for (size_t i = 0; i < actor_ts.size(); ++i) {
@@ -236,8 +260,8 @@ void caf_main(actor_system& sys, const config& cfg) {
           t2.push_back(enqueue_ts.at(i) - dequeue_ts.at(i));
         }
         init_file(t1.size());
-        print_vec(1, t1);
-        print_vec(2, t2);
+        print_vec("t1", t1);
+        print_vec("t2", t2);
       }
       break;
     }
@@ -258,29 +282,36 @@ void caf_main(actor_system& sys, const config& cfg) {
       timestamp_vec ts_actor;
       self->receive([&](timestamp_vec& ts) { ts_actor = move(ts); });
       auto ts = mm.get_timestamps();
-      auto offset = ts.trans_enqueue_.at(0).count();
       cout << endl;
-      // First 5 calls are basp handshake.
-      ts_actor = strip_vec(ts_actor, 1, 1);
-      ts.ep_enqueue_ = strip_vec(ts.ep_enqueue_, 1, 1);
-      ts.ep_dequeue_ = strip_vec(ts.ep_dequeue_, 1, 1);
-      // only release mode!!
-      ts.trans_enqueue_ = strip_vec(ts.trans_enqueue_, 5, 0);
-      // debug
-      // ts.trans_enqueue_ = strip_vec(ts.trans_enqueue_, 5, 0);
 
+      /*if (!(ts_actor.size() == ts.ep_enqueue_.size() == ts.ep_dequeue_.size()
+            == ts.trans_enqueue_.size()))
+        abort();*/
+
+      /*      print_len(ts_actor);
+      print_len(ts.ep_enqueue_);
+      print_len(ts.ep_dequeue_);
+      print_len(ts.trans_enqueue_);
+
+      print_vec(1, ts_actor, offset);
+      print_vec(2, ts.ep_enqueue_, offset);
+      print_vec(3, ts.ep_dequeue_, offset);
+      print_vec(4, ts.trans_enqueue_, offset);
+
+      // First 5 calls are basp handshake.
+      ts_actor = strip_vec(ts_actor, 0, 0);
+      ts.ep_enqueue_ = strip_vec(ts.ep_enqueue_, 0, 0);
+      ts.ep_dequeue_ = strip_vec(ts.ep_dequeue_, 0, 0);
+      ts.trans_enqueue_ = strip_vec(ts.trans_enqueue_, 0, 0);*/
       timestamp_vec t1; // actor -> ep_manager
       timestamp_vec t2; // enqueue ep_manager -> dequeue manager
-      timestamp_vec t3; // dequeue ep_manager -> enqueue trans
-      for (size_t i = 0; i < ts.ep_enqueue_.size(); ++i) {
-        t1.push_back(ts.ep_enqueue_.at(i) - ts_actor.at(i));
-        t2.push_back(ts.ep_dequeue_.at(i) - ts.ep_enqueue_.at(i));
-        t3.push_back(ts.trans_enqueue_.at(i) - ts.ep_dequeue_.at(i));
+      for (size_t i = 0; i < ts_actor.size(); ++i) {
+        t1.push_back(ts.ep_dequeue_.at(i) - ts_actor.at(i));
+        t2.push_back(ts.trans_enqueue_.at(i) - ts.ep_dequeue_.at(i));
       }
       init_file(t1.size());
-      print_vec(1, t1);
-      print_vec(2, t2);
-      print_vec(3, t3);
+      print_vec("t1"s, t1);
+      print_vec("t2"s, t2);
       break;
     }
     default:

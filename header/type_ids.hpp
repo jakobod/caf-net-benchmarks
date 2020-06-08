@@ -33,6 +33,7 @@ CAF_ADD_TYPE_ID(caf_net_benchmark, (caf::stream<std::vector<uint64_t>>) )
 CAF_ADD_TYPE_ID(caf_net_benchmark, (std::vector<std::vector<uint64_t>>) )
 
 CAF_ADD_ATOM(caf_net_benchmark, start_atom)
+CAF_ADD_ATOM(caf_net_benchmark, start_confirm_atom)
 CAF_ADD_ATOM(caf_net_benchmark, stop_atom)
 CAF_ADD_ATOM(caf_net_benchmark, done_atom)
 CAF_ADD_ATOM(caf_net_benchmark, io_bench_atom)

@@ -26,6 +26,7 @@
 #include "caf/net/stream_socket.hpp"
 #include "caf/net/tcp_accept_socket.hpp"
 #include "caf/net/tcp_stream_socket.hpp"
+#include "caf/string_view.hpp"
 #include "caf/uri.hpp"
 
 using namespace std::literals::string_literals;
@@ -73,8 +74,8 @@ make_connected_tcp_socket_pair() {
 
 // -- Vector stuff for easy handling -------------------------------------------
 
-void print_vec(int num, timestamp_vec& v, size_t offset) {
-  std::cout << num << ", ";
+void print_vec(caf::string_view what, timestamp_vec& v, size_t offset) {
+  std::cout << what << ", ";
   for (const auto& t : v)
     std::cout << t.count() - offset << ",";
   std::cout << std::endl;

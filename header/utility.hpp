@@ -37,7 +37,7 @@ bench_mode convert(const std::string& str);
 caf::expected<std::pair<caf::net::stream_socket, caf::net::stream_socket>>
 make_connected_tcp_socket_pair();
 
-void print_vec(int num, timestamp_vec& v, size_t offset = 0);
+void print_vec(caf::string_view what, timestamp_vec& v, size_t offset = 0);
 
 void print_len(timestamp_vec& v);
 
