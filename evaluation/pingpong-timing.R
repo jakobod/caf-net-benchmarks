@@ -10,13 +10,13 @@ pingpong_net_master$avg <- rowMeans(pingpong_net_master[,2:40000])
 pingpong_net_master$sdev <- apply(pingpong_net_master[ ,2:40000], 1, sd)
 pingpong_net_master$backend <- 'net'
 
-pingpong_io <- read.csv("evaluation/data/pingpong-timing-io.out", sep=",")[ ,1:40000]
-pingpong_io$avg <- rowMeans(pingpong_io[,2:40000])
-pingpong_io$sdev <- apply(pingpong_io[ ,2:40000], 1, sd)
-pingpong_io$backend <- 'io'
+pingpong_fix <- read.csv("evaluation/data/pingpong-timing-fix-net.out", sep=",")[ ,1:40000]
+pingpong_fix$avg <- rowMeans(pingpong_fix[,2:40000])
+pingpong_fix$sdev <- apply(pingpong_fix[ ,2:40000], 1, sd)
+pingpong_fix$backend <- 'net - fixed'
 
 
-ppdf <- rbind(pingpong_net_master, pingpong_io)
+ppdf <- rbind(pingpong_net_master, pingpong_fix)
 ppdf$upper <- ppdf$avg + ppdf$sdev
 ppdf$lower <- ppdf$avg - ppdf$sdev
 
@@ -27,7 +27,7 @@ print(ppdf$upper)
 print(ppdf$lower)
 
 pp_plot <- ggplot(ppdf, aes(x=what, y=avg, fill=backend)) + 
-  scale_y_continuous(labels = human_numbers, limits=c(0,26), breaks=seq(0, 26, 2)) +
+  scale_y_continuous(labels = human_numbers, limits=c(-0.5,22), breaks=seq(0, 22, 2)) +
   geom_bar(stat="identity", position=position_dodge()) +
   geom_errorbar(aes(ymin=lower, ymax=upper), width=.2,
                 position=position_dodge(.9))+
