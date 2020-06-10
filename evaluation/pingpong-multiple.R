@@ -5,22 +5,22 @@ require(gridExtra)
 
 source("evaluation/human_readable.R")
 
-pingpong_net_master <- read.csv("evaluation/data/pingpong-multiple-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+pingpong_net_master <- read.csv("evaluation/data/pingpong-multiple-1-pings-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 pingpong_net_master$avg <- rowMeans(pingpong_net_master[,2:11])
 pingpong_net_master$sdev <- apply(pingpong_net_master[,2:11], 1, sd)
-pingpong_net_master$proto <- '1 net - master'
+pingpong_net_master$proto <- 'net - master'
 
-pingpong_net_proxy <- read.csv("evaluation/data/pingpong-multiple-net-proxy.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
-pingpong_net_proxy$avg <- rowMeans(pingpong_net_proxy[,2:11])
-pingpong_net_proxy$sdev <- apply(pingpong_net_proxy[,2:11], 1, sd)
-pingpong_net_proxy$proto <- '2 - proxy'
+pingpong_net_master_no_fix <- read.csv("evaluation/data/pingpong-multiple-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+pingpong_net_master_no_fix$avg <- rowMeans(pingpong_net_master_no_fix[,2:11])
+pingpong_net_master_no_fix$sdev <- apply(pingpong_net_master_no_fix[,2:11], 1, sd)
+pingpong_net_master_no_fix$proto <- 'net - no fix'
 
-pingpong_io <- read.csv("evaluation/data/pingpong-multiple-io.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+pingpong_io <- read.csv("evaluation/data/pingpong-multiple-1-pings-io.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 pingpong_io$avg <- rowMeans(pingpong_io[,2:11])
 pingpong_io$sdev <- apply(pingpong_io[,2:11], 1, sd)
-pingpong_io$proto <- '3 - io'
+pingpong_io$proto <- 'io'
 
-ppdf <- rbind(pingpong_net_master, pingpong_net_proxy, pingpong_io)
+ppdf <- rbind(pingpong_net_master, pingpong_net_master_no_fix, pingpong_io)
 ppdf$upper <- ppdf$avg + ppdf$sdev
 ppdf$lower <- ppdf$avg - ppdf$sdev
 

@@ -20,9 +20,9 @@
 
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "caf/expected.hpp"
+#include "caf/net/socket_guard.hpp"
 #include "caf/net/stream_socket.hpp"
 #include "caf/net/tcp_accept_socket.hpp"
 #include "caf/net/tcp_stream_socket.hpp"
@@ -52,9 +52,10 @@ make_connected_tcp_socket_pair() {
     acceptor = *res;
   else
     return res.error();
+  auto guard = make_socket_guard(acceptor);
   uri::authority_type dst;
   dst.host = "localhost"s;
-  if (auto port = local_port(socket_cast<network_socket>(acceptor)))
+  if (auto port = local_port(socket_cast<network_socket>(guard.socket())))
     dst.port = *port;
   else
     return port.error();
@@ -63,7 +64,7 @@ make_connected_tcp_socket_pair() {
     sock1 = *res;
   else
     return res.error();
-  if (auto res = accept(acceptor))
+  if (auto res = accept(guard.socket()))
     return make_pair(sock1, *res);
   else
     return res.error();

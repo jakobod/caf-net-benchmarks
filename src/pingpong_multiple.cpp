@@ -165,8 +165,8 @@ void net_run_node(uri id, net::stream_socket sock) {
   auto source_id = *make_uri("tcp://source/name/source");
   auto ret = backend.emplace(make_node_id(*source_id.authority_only()), sock);
   if (!ret)
-    cerr << " emplace failed with err: " << to_string(ret.error()) << endl;
-  auto source = mm.remote_actor(source_id);
+    cerr << "emplace failed with err: " << to_string(ret.error()) << endl;
+  auto source = mm.remote_actor(source_id, infinite);
   if (!source) {
     cerr << "got error while resolving: " << to_string(source.error()) << endl;
     abort(); // kill this thread and everything else!
@@ -205,7 +205,9 @@ void caf_main(actor_system& sys, const config& cfg) {
       auto& backend = *dynamic_cast<net::backend::tcp*>(mm.backend("tcp"));
       mm.publish(src, "source");
       for (size_t i = 0; i < cfg.num_remote_nodes; ++i) {
-        auto p = *net::make_stream_socket_pair();
+        auto p = *make_connected_tcp_socket_pair();
+        cerr << "socket1-port: " << net::local_port(p.first)
+             << " , socket2-port: " << net::local_port(p.second) << endl;
         auto sink_id = *make_uri("tcp://sink"s + to_string(i));
         backend.emplace(make_node_id(sink_id), p.first);
         auto f = [=]() { net_run_node(sink_id, p.second); };
@@ -219,8 +221,8 @@ void caf_main(actor_system& sys, const config& cfg) {
   for (auto& t : threads)
     t.join();
   cerr << endl;
-} // namespace
+}
 
 } // namespace
 
-CAF_MAIN(io::middleman)
+CAF_MAIN(/*io::middleman*/)
