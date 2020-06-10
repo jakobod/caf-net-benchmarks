@@ -254,27 +254,36 @@ void caf_main(actor_system& sys, const config& cfg) {
           t.join();
 
         timestamp_vec actor_ts;
+        timestamp_vec actor_recv_ts;
         timestamp_vec dequeue_ts;
+        timestamp_vec new_data_ts;
         timestamp_vec enqueue_ts;
-        self->receive([&](timestamp_vec& ts) { actor_ts = move(ts); });
+        self->receive([&](timestamp_vec& ts, timestamp_vec& ts2) {
+          actor_ts = move(ts);
+          actor_recv_ts = move(ts2);
+        });
         self->send(bb, get_timestamps_atom_v);
-        self->receive([&](timestamp_vec dequeue, timestamp_vec enqueue) {
+        self->receive([&](timestamp_vec dequeue, timestamp_vec new_data,
+                          timestamp_vec enqueue) {
           dequeue_ts = dequeue;
+          new_data_ts = new_data;
           enqueue_ts = enqueue;
         });
 
-        if (!(actor_ts.size() == dequeue_ts.size() == enqueue_ts.size()))
-          abort();
+        print_len(new_data_ts);
+        print_len(actor_recv_ts);
 
         timestamp_vec t1; // actor -> dequeue broker
-        timestamp_vec t2; // dequeue broker -> enqueue stream
-        for (size_t i = 0; i < actor_ts.size(); ++i) {
-          t1.push_back(dequeue_ts.at(i) - actor_ts.at(i));
-          t2.push_back(enqueue_ts.at(i) - dequeue_ts.at(i));
+        // timestamp_vec t2; // dequeue broker -> enqueue stream
+        t1.reserve(actor_recv_ts.size());
+        for (size_t i = 0; i < actor_recv_ts.size(); ++i) {
+          // t1.push_back(dequeue_ts.at(i) - actor_ts.at(i));
+          // t2.push_back(enqueue_ts.at(i) - dequeue_ts.at(i));
+          t1.push_back(actor_recv_ts[i] - new_data_ts[i * 2]);
         }
         init_file(t1.size());
         print_vec("t1", t1);
-        print_vec("t2", t2);
+        //        print_vec("t2", t2);
       }
       break;
     }
@@ -318,7 +327,7 @@ void caf_main(actor_system& sys, const config& cfg) {
         t5.push_back(ts.application_t4_[i] - ts.application_t3_[i]);
         t6.push_back(ts.application_t5_[i] - ts.application_t4_[i]);
         t7.push_back(ts.trans_enqueue_[i] - ts.application_t5_[i]);*/
-        t8.push_back(ts_actor_recv[i] - ts.trans_read_event_[i]);
+        t8.push_back(ts_actor_recv[i] - ts.trans_read_event_[i * 2]);
       }
 
       init_file(t8.size());
