@@ -49,17 +49,24 @@ struct tick_state {
     count = 0;
   }
 
-  void timestamp() {
+  void send_timestamp() {
     auto ts = duration_cast<microseconds>(
       system_clock::now().time_since_epoch());
-    timestamps.push_back(ts);
+    send_timestamps.push_back(ts);
+  }
+
+  void recv_timestamp() {
+    auto ts = duration_cast<microseconds>(
+      system_clock::now().time_since_epoch());
+    recv_timestamps.push_back(ts);
   }
 
   vector<actor> sinks;
   size_t count = 0;
   size_t iterations = 0;
   size_t arrived = 0;
-  timestamp_vec timestamps;
+  timestamp_vec send_timestamps;
+  timestamp_vec recv_timestamps;
 
   void start_timestamps(stateful_actor<tick_state>* self, bench_mode mode) {
     if (mode == bench_mode::net) {
@@ -105,7 +112,7 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
       self->state.start_timestamps(self, mode);
       self->state.for_each([=](const auto& sink) {
         for (size_t i = 0; i < num_pings; ++i) {
-          self->state.timestamp();
+          self->state.send_timestamp();
           self->send(sink, ping_atom_v);
         }
       });
@@ -119,7 +126,8 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
         cout << endl;
         self->state.for_each(
           [=](const auto& sink) { self->send(sink, done_atom_v); });
-        self->send(listener, self->state.timestamps);
+        self->send(listener, self->state.send_timestamps,
+                   self->state.recv_timestamps);
         self->quit();
       } else {
         self->delayed_send(self, seconds(1), tick_atom_v);
@@ -127,7 +135,8 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
     },
     [=](pong_atom) {
       self->state.count++;
-      self->state.timestamp();
+      self->state.send_timestamp();
+      self->state.recv_timestamp();
       return ping_atom_v;
     },
   };
@@ -279,21 +288,15 @@ void caf_main(actor_system& sys, const config& cfg) {
       }
       for (auto& t : threads)
         t.join();
-      timestamp_vec ts_actor;
-      self->receive([&](timestamp_vec& ts) { ts_actor = move(ts); });
+      timestamp_vec ts_actor_send;
+      timestamp_vec ts_actor_recv;
+      self->receive([&](timestamp_vec& ts, timestamp_vec& ts2) {
+        ts_actor_send = move(ts);
+        ts_actor_recv = move(ts2);
+      });
       auto ts = mm.get_timestamps();
       cout << endl;
 
-      /*      print_len(ts_actor);
-            print_len(ts.ep_enqueue_);
-            print_len(ts.ep_dequeue_);
-            print_len(ts.application_t1_);
-            print_len(ts.application_t2_);
-            print_len(ts.application_t3_);
-            print_len(ts.application_t4_);
-            print_len(ts.application_t5_);
-            print_len(ts.trans_enqueue_);
-      */
       timestamp_vec t1; // actor -> ep_manager
       timestamp_vec t2; // enqueue ep_manager -> dequeue manager
       timestamp_vec t3; // enqueue ep_manager -> dequeue manager
@@ -303,8 +306,10 @@ void caf_main(actor_system& sys, const config& cfg) {
       timestamp_vec t7; // enqueue ep_manager -> dequeue manager
       timestamp_vec t8; // enqueue ep_manager -> dequeue manager
 
-      for (size_t i = 0; i < ts_actor.size(); ++i) {
-        t1.push_back(ts.ep_dequeue_[i] - ts_actor[i]);
+      timestamp_vec t9; // read_packet_duration
+
+      for (size_t i = 0; i < ts_actor_send.size(); ++i) {
+        t1.push_back(ts.ep_dequeue_[i] - ts_actor_send[i]);
         t2.push_back(ts.application_t1_[i] - ts.ep_dequeue_[i]);
         t3.push_back(ts.application_t2_[i] - ts.application_t1_[i]);
         t4.push_back(ts.application_t3_[i] - ts.application_t2_[i]);
@@ -312,7 +317,9 @@ void caf_main(actor_system& sys, const config& cfg) {
         t6.push_back(ts.application_t5_[i] - ts.application_t4_[i]);
         t7.push_back(ts.trans_enqueue_[i] - ts.application_t5_[i]);
         t8.push_back(ts.trans_packet_written_[i] - ts.trans_enqueue_[i]);
+        t9.push_back(ts_actor_recv[i] - ts.trans_read_event_[i]);
       }
+
       init_file(t1.size());
       print_vec("t1"s, t1);
       print_vec("t2"s, t2);
@@ -322,6 +329,7 @@ void caf_main(actor_system& sys, const config& cfg) {
       print_vec("t6"s, t6);
       print_vec("t7"s, t7);
       print_vec("t8"s, t8);
+      print_vec("t9"s, t9);
       break;
     }
     default:
