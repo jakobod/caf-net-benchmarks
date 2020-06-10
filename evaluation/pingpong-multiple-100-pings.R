@@ -10,12 +10,17 @@ pingpong_net_master$avg <- rowMeans(pingpong_net_master[,2:11])
 pingpong_net_master$sdev <- apply(pingpong_net_master[,2:11], 1, sd)
 pingpong_net_master$proto <- 'net - master'
 
+pingpong_net_vector <- read.csv("evaluation/data/pingpong-multiple-100-pings-vectored-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+pingpong_net_vector$avg <- rowMeans(pingpong_net_vector[,2:11])
+pingpong_net_vector$sdev <- apply(pingpong_net_vector[,2:11], 1, sd)
+pingpong_net_vector$proto <- 'net - vector'
+
 pingpong_io <- read.csv("evaluation/data/pingpong-multiple-100-pings-io.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 pingpong_io$avg <- rowMeans(pingpong_io[,2:11])
 pingpong_io$sdev <- apply(pingpong_io[,2:11], 1, sd)
 pingpong_io$proto <- 'io'
 
-ppdf <- rbind(pingpong_net_master, pingpong_io)
+ppdf <- rbind(pingpong_net_master, pingpong_net_vector, pingpong_io)
 ppdf$upper <- ppdf$avg + ppdf$sdev
 ppdf$lower <- ppdf$avg - ppdf$sdev
 
