@@ -44,6 +44,10 @@ using namespace std::chrono;
 namespace {
 
 struct tick_state {
+  tick_state() {
+    send_timestamps.reserve(100'000);
+    recv_timestamps.reserve(100'000);
+  }
   void tick() {
     // cout << count << ", ";
     count = 0;
@@ -297,39 +301,35 @@ void caf_main(actor_system& sys, const config& cfg) {
       auto ts = mm.get_timestamps();
       cout << endl;
 
-      timestamp_vec t1; // actor -> ep_manager
+      /*timestamp_vec t1; // actor -> ep_manager
       timestamp_vec t2; // enqueue ep_manager -> dequeue manager
       timestamp_vec t3; // enqueue ep_manager -> dequeue manager
       timestamp_vec t4; // enqueue ep_manager -> dequeue manager
       timestamp_vec t5; // enqueue ep_manager -> dequeue manager
       timestamp_vec t6; // enqueue ep_manager -> dequeue manager
-      timestamp_vec t7; // enqueue ep_manager -> dequeue manager
-      timestamp_vec t8; // enqueue ep_manager -> dequeue manager
+      timestamp_vec t7; // enqueue ep_manager -> dequeue manager*/
+      timestamp_vec t8; // duration receive message
 
-      timestamp_vec t9; // read_packet_duration
-
-      for (size_t i = 0; i < ts_actor_send.size(); ++i) {
-        t1.push_back(ts.ep_dequeue_[i] - ts_actor_send[i]);
+      for (size_t i = 0; i < ts_actor_recv.size(); ++i) {
+        /*t1.push_back(ts.ep_dequeue_[i] - ts_actor_send[i]);
         t2.push_back(ts.application_t1_[i] - ts.ep_dequeue_[i]);
         t3.push_back(ts.application_t2_[i] - ts.application_t1_[i]);
         t4.push_back(ts.application_t3_[i] - ts.application_t2_[i]);
         t5.push_back(ts.application_t4_[i] - ts.application_t3_[i]);
         t6.push_back(ts.application_t5_[i] - ts.application_t4_[i]);
-        t7.push_back(ts.trans_enqueue_[i] - ts.application_t5_[i]);
-        t8.push_back(ts.trans_packet_written_[i] - ts.trans_enqueue_[i]);
-        t9.push_back(ts_actor_recv[i] - ts.trans_read_event_[i]);
+        t7.push_back(ts.trans_enqueue_[i] - ts.application_t5_[i]);*/
+        t8.push_back(ts_actor_recv[i] - ts.trans_read_event_[i]);
       }
 
-      init_file(t1.size());
-      print_vec("t1"s, t1);
+      init_file(t8.size());
+      /*print_vec("t1"s, t1);
       print_vec("t2"s, t2);
       print_vec("t3"s, t3);
       print_vec("t4"s, t4);
       print_vec("t5"s, t5);
       print_vec("t6"s, t6);
-      print_vec("t7"s, t7);
-      print_vec("t8"s, t8);
-      print_vec("t9"s, t9);
+      print_vec("t7"s, t7);*/
+      print_vec("t1"s, t8);
       break;
     }
     default:
