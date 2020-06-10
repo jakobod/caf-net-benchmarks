@@ -5,6 +5,11 @@ require(gridExtra)
 
 source("evaluation/human_readable.R")
 
+pingpong_net_vector_fetch <- read.csv("evaluation/data/pingpong-multiple-1-pings-vectored-fetch-more-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+pingpong_net_vector_fetch$avg <- rowMeans(pingpong_net_vector_fetch[,2:11])
+pingpong_net_vector_fetch$sdev <- apply(pingpong_net_vector_fetch[,2:11], 1, sd)
+pingpong_net_vector_fetch$proto <- 'net - vector fetch more'
+
 pingpong_net_vector <- read.csv("evaluation/data/pingpong-multiple-1-pings-vectored-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 pingpong_net_vector$avg <- rowMeans(pingpong_net_vector[,2:11])
 pingpong_net_vector$sdev <- apply(pingpong_net_vector[,2:11], 1, sd)
@@ -25,7 +30,7 @@ pingpong_io$avg <- rowMeans(pingpong_io[,2:11])
 pingpong_io$sdev <- apply(pingpong_io[,2:11], 1, sd)
 pingpong_io$proto <- 'io'
 
-ppdf <- rbind(pingpong_net_master, pingpong_net_master_no_fix, pingpong_net_vector, pingpong_io)
+ppdf <- rbind(pingpong_net_master, pingpong_net_master_no_fix, pingpong_net_vector, pingpong_net_vector_fetch, pingpong_io)
 ppdf$upper <- ppdf$avg + ppdf$sdev
 ppdf$lower <- ppdf$avg - ppdf$sdev
 

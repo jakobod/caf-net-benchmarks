@@ -5,6 +5,16 @@ require(gridExtra)
 
 source("evaluation/human_readable.R")
 
+pingpong_net_vector_fetch_20 <- read.csv("evaluation/data/pingpong-multiple-10-pings-vectored-fetch-20-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+pingpong_net_vector_fetch_20$avg <- rowMeans(pingpong_net_vector_fetch_20[,2:11])
+pingpong_net_vector_fetch_20$sdev <- apply(pingpong_net_vector_fetch_20[,2:11], 1, sd)
+pingpong_net_vector_fetch_20$proto <- 'net - vector fetch 20'
+
+pingpong_net_vector_fetch <- read.csv("evaluation/data/pingpong-multiple-10-pings-vectored-fetch-more-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+pingpong_net_vector_fetch$avg <- rowMeans(pingpong_net_vector_fetch[,2:11])
+pingpong_net_vector_fetch$sdev <- apply(pingpong_net_vector_fetch[,2:11], 1, sd)
+pingpong_net_vector_fetch$proto <- 'net - vector fetch 4'
+
 pingpong_net_master <- read.csv("evaluation/data/pingpong-multiple-10-pings-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 pingpong_net_master$avg <- rowMeans(pingpong_net_master[,2:11])
 pingpong_net_master$sdev <- apply(pingpong_net_master[,2:11], 1, sd)
@@ -20,7 +30,7 @@ pingpong_io$avg <- rowMeans(pingpong_io[,2:11])
 pingpong_io$sdev <- apply(pingpong_io[,2:11], 1, sd)
 pingpong_io$proto <- 'io'
 
-ppdf <- rbind(pingpong_net_master, pingpong_net_vector, pingpong_io)
+ppdf <- rbind(pingpong_net_master, pingpong_net_vector, pingpong_net_vector_fetch, pingpong_net_vector_fetch_20, pingpong_io)
 ppdf$upper <- ppdf$avg + ppdf$sdev
 ppdf$lower <- ppdf$avg - ppdf$sdev
 
@@ -33,10 +43,10 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
       ymin=lower,
       ymax=upper
     ),
-    width=0.5
+    width=0.2
   ) +
   scale_x_continuous(breaks=seq(1, 32, 1)) + # expand=c(0, 0), limits=c(0, 10)
-  scale_y_continuous(labels = human_numbers, limits=c(0,225000), breaks=seq(0, 225000, 25000)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_y_continuous(labels = human_numbers, limits=c(25000,230000), breaks=seq(25000, 230000, 10000)) + # expand=c(0, 0), limits=c(0, 10)
   theme_bw() +
   theme(
     legend.title=element_blank(),
