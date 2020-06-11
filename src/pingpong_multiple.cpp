@@ -263,8 +263,8 @@ void caf_main(actor_system& sys, const config& cfg) {
           actor_recv_ts = move(ts2);
         });
         self->send(bb, get_timestamps_atom_v);
-        self->receive([&](timestamp_vec dequeue, timestamp_vec new_data,
-                          timestamp_vec enqueue) {
+        self->receive([&](timestamp_vec& dequeue, timestamp_vec& new_data,
+                          timestamp_vec& enqueue) {
           dequeue_ts = dequeue;
           new_data_ts = new_data;
           enqueue_ts = enqueue;
