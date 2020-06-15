@@ -5,15 +5,20 @@ require(gridExtra)
 
 source("evaluation/human_readable.R")
 
+pingpong_net_single_buf_fetch <- read.csv("evaluation/data/pingpong-10-ping-single-buf-fetch-1-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+pingpong_net_single_buf_fetch$avg <- rowMeans(pingpong_net_single_buf_fetch[,2:11])
+pingpong_net_single_buf_fetch$sdev <- apply(pingpong_net_single_buf_fetch[,2:11], 1, sd)
+pingpong_net_single_buf_fetch$proto <- 'net - single buffer fetch 1'
+
+pingpong_net_single_buf_fetch_20 <- read.csv("evaluation/data/pingpong-10-ping-single-buf-fetch-20-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+pingpong_net_single_buf_fetch_20$avg <- rowMeans(pingpong_net_single_buf_fetch_20[,2:11])
+pingpong_net_single_buf_fetch_20$sdev <- apply(pingpong_net_single_buf_fetch_20[,2:11], 1, sd)
+pingpong_net_single_buf_fetch_20$proto <- 'net - single buffer fetch 20'
+
 pingpong_net_vector_fetch_20 <- read.csv("evaluation/data/pingpong-multiple-10-pings-vectored-fetch-20-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 pingpong_net_vector_fetch_20$avg <- rowMeans(pingpong_net_vector_fetch_20[,2:11])
 pingpong_net_vector_fetch_20$sdev <- apply(pingpong_net_vector_fetch_20[,2:11], 1, sd)
 pingpong_net_vector_fetch_20$proto <- 'net - vector fetch 20'
-
-pingpong_net_vector_fetch <- read.csv("evaluation/data/pingpong-multiple-10-pings-vectored-fetch-more-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
-pingpong_net_vector_fetch$avg <- rowMeans(pingpong_net_vector_fetch[,2:11])
-pingpong_net_vector_fetch$sdev <- apply(pingpong_net_vector_fetch[,2:11], 1, sd)
-pingpong_net_vector_fetch$proto <- 'net - vector fetch 4'
 
 pingpong_net_master <- read.csv("evaluation/data/pingpong-multiple-10-pings-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 pingpong_net_master$avg <- rowMeans(pingpong_net_master[,2:11])
@@ -23,14 +28,14 @@ pingpong_net_master$proto <- 'net - master'
 pingpong_net_vector <- read.csv("evaluation/data/pingpong-multiple-10-pings-vectored-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 pingpong_net_vector$avg <- rowMeans(pingpong_net_vector[,2:11])
 pingpong_net_vector$sdev <- apply(pingpong_net_vector[,2:11], 1, sd)
-pingpong_net_vector$proto <- 'net - vector'
+pingpong_net_vector$proto <- 'net - vector fetch 1'
 
 pingpong_io <- read.csv("evaluation/data/pingpong-multiple-10-pings-io.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 pingpong_io$avg <- rowMeans(pingpong_io[,2:11])
 pingpong_io$sdev <- apply(pingpong_io[,2:11], 1, sd)
 pingpong_io$proto <- 'io'
 
-ppdf <- rbind(pingpong_net_master, pingpong_net_vector, pingpong_net_vector_fetch, pingpong_net_vector_fetch_20, pingpong_io)
+ppdf <- rbind(pingpong_net_master, pingpong_net_vector, pingpong_net_single_buf_fetch, pingpong_net_single_buf_fetch_20, pingpong_net_vector_fetch_20, pingpong_io)
 ppdf$upper <- ppdf$avg + ppdf$sdev
 ppdf$lower <- ppdf$avg - ppdf$sdev
 
@@ -46,7 +51,7 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
     width=0.2
   ) +
   scale_x_continuous(breaks=seq(1, 32, 1)) + # expand=c(0, 0), limits=c(0, 10)
-  scale_y_continuous(labels = human_numbers, limits=c(25000,230000), breaks=seq(25000, 230000, 10000)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_y_continuous(labels = human_numbers, limits=c(40000,230000), breaks=seq(40000, 230000, 10000)) + # expand=c(0, 0), limits=c(0, 10)
   theme_bw() +
   theme(
     legend.title=element_blank(),
@@ -61,7 +66,7 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
     text=element_text(size=9),
     strip.text.x=element_blank()
   ) +
-  scale_color_brewer(type="qual", palette=6) +
+  scale_fill_brewer(palette="Dark2") +
   ggtitle("Pingpong multiple remote nodes 10 Pings") +
   labs(x="remote nodes [#]", y="throughput [pongs/s]")
 
