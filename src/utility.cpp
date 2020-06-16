@@ -18,9 +18,11 @@
 
 #include "utility.hpp"
 
+#include <cstdlib>
 #include <string>
 #include <utility>
 
+#include "caf/error.hpp"
 #include "caf/expected.hpp"
 #include "caf/net/socket_guard.hpp"
 #include "caf/net/stream_socket.hpp"
@@ -68,4 +70,14 @@ make_connected_tcp_socket_pair() {
     return make_pair(sock1, *res);
   else
     return res.error();
+}
+
+void exit(const std::string& msg) {
+  if (msg != "")
+    std::cerr << "ERROR: " << msg << std::endl;
+  std::abort();
+}
+
+void exit(const caf::error& err) {
+  exit(caf::to_string(err));
 }

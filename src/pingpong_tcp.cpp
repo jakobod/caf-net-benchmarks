@@ -127,7 +127,8 @@ struct config : actor_system_config {
 void io_run_node(uint16_t port, int sock) {
   actor_system_config cfg;
   cfg.load<io::middleman>();
-  cfg.parse(0, nullptr);
+  if (auto err = cfg.parse(0, nullptr))
+    exit(err);
   cfg.set("logger.file-name", "sink.log");
   actor_system sys{cfg};
   using io::network::scribe_impl;
@@ -139,26 +140,23 @@ void io_run_node(uint16_t port, int sock) {
   self->request(bb, infinite, connect_atom_v, move(scribe), port)
     .receive(
       [&](node_id&, strong_actor_ptr& ptr, set<string>&) {
-        if (ptr == nullptr) {
-          cerr << "ERROR: could not get a handle to remote source" << endl;
-          return;
-        }
+        if (ptr == nullptr)
+          exit("ERROR: could not get a handle to remote source");
         auto sink = sys.spawn(pong_actor, actor_cast<actor>(ptr));
         anon_send(sink, start_atom_v);
       },
-      [&](error& err) {
-        cerr << "ERROR: " << to_string(err) << endl;
-        abort();
-      });
+      [&](error& err) { exit(err); });
 }
 
 void net_run_node(uri id, net::stream_socket sock) {
   actor_system_config cfg;
   cfg.load<net::middleman, net::backend::tcp>();
-  cfg.parse(0, nullptr);
+  if (auto err = cfg.parse(0, nullptr))
+    exit(err);
   cfg.set("logger.file-name", "sink.log");
   put(cfg.content, "middleman.this-node", id);
-  cfg.parse(0, nullptr);
+  if (auto err = cfg.parse(0, nullptr))
+    exit(err);
   actor_system sys{cfg};
   auto& mm = sys.network_manager();
   auto& backend = *dynamic_cast<net::backend::tcp*>(mm.backend("tcp"));
@@ -206,8 +204,6 @@ void caf_main(actor_system& sys, const config& cfg) {
       mm.publish(src, "source");
       for (size_t i = 0; i < cfg.num_remote_nodes; ++i) {
         auto p = *make_connected_tcp_socket_pair();
-        cerr << "socket1-port: " << net::local_port(p.first)
-             << " , socket2-port: " << net::local_port(p.second) << endl;
         auto sink_id = *make_uri("tcp://sink"s + to_string(i));
         backend.emplace(make_node_id(sink_id), p.first);
         auto f = [=]() { net_run_node(sink_id, p.second); };
@@ -225,4 +221,4 @@ void caf_main(actor_system& sys, const config& cfg) {
 
 } // namespace
 
-CAF_MAIN(/*io::middleman*/)
+CAF_MAIN(io::middleman)

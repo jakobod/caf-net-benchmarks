@@ -171,7 +171,8 @@ struct config : actor_system_config {
 void io_run_source(net::stream_socket sock, uint16_t port) {
   actor_system_config cfg;
   cfg.load<io::middleman>();
-  cfg.parse(0, nullptr);
+  if (auto err = cfg.parse(0, nullptr))
+    exit(err);
   cfg.set("logger.file-name", "sink.log");
   actor_system sys{cfg};
   using io::network::scribe_impl;
@@ -183,14 +184,12 @@ void io_run_source(net::stream_socket sock, uint16_t port) {
   self->request(bb, infinite, connect_atom_v, move(scribe), port)
     .receive(
       [&](node_id&, strong_actor_ptr& ptr, set<string>&) {
-        if (ptr == nullptr) {
-          cerr << "ERROR: could not get a handle to remote source\n";
-          return;
-        }
+        if (ptr == nullptr)
+          exit("could not get a handle to remote source");
         auto source = sys.spawn(source_actor);
         self->send(source, start_atom_v, actor_cast<actor>(ptr));
       },
-      [&](error& err) { cerr << "ERROR: " << to_string(err) << endl; });
+      [&](error& err) { exit(err); });
 }
 
 void net_run_source(net::stream_socket sock, size_t id) {
@@ -199,23 +198,23 @@ void net_run_source(net::stream_socket sock, size_t id) {
   auto sink_locator = *make_uri("tcp://earth/name/sink"s + to_string(id));
   actor_system_config cfg;
   cfg.load<net::middleman, net::backend::tcp>();
-  cfg.parse(0, nullptr);
+  if (auto err = cfg.parse(0, nullptr))
+    exit(err);
   cfg.set("logger.file-name", "sink.log");
   put(cfg.content, "middleman.this-node", source_id);
-  cfg.parse(0, nullptr);
+  if (auto err = cfg.parse(0, nullptr))
+    exit(err);
   actor_system sys{cfg};
   auto& mm = sys.network_manager();
   auto& backend = *dynamic_cast<net::backend::tcp*>(mm.backend("tcp"));
   auto ret = backend.emplace(make_node_id(*sink_locator.authority_only()),
                              sock);
   if (!ret)
-    cerr << " emplace failed with err: " << to_string(ret.error()) << endl;
+    exit(ret.error());
   cerr << "resolve locator " << to_string(sink_locator) << endl;
   auto sink = mm.remote_actor(sink_locator);
-  if (!sink) {
-    cerr << "ERROR: " << to_string(sink.error()) << endl;
-    abort();
-  }
+  if (!sink)
+    exit(sink.error());
   scoped_actor self{sys};
   auto source = sys.spawn(source_actor);
   self->send(source, start_atom_v, *sink);
