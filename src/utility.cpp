@@ -72,9 +72,12 @@ make_connected_tcp_socket_pair() {
     return res.error();
 }
 
-void exit(const std::string& msg) {
+void exit(const std::string& msg, const caf::error& err) {
+  std::cerr << "ERROR: ";
   if (msg != "")
-    std::cerr << "ERROR: " << msg << std::endl;
+    std::cerr << msg;
+  if (err)
+    std::cerr << ": " << to_string(err) << std::endl;
   std::abort();
 }
 

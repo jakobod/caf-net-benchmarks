@@ -51,6 +51,6 @@ void erase(std::vector<T>& vec, size_t begin, size_t end) {
   vec.erase(vec.begin() + begin, vec.begin() + end);
 }
 
-void exit(const std::string& msg = "");
+void exit(const std::string& msg = "", const caf::error& err = caf::none);
 
-void exit(const caf::error & err);
+void exit(const caf::error& err);

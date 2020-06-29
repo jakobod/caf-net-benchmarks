@@ -128,7 +128,7 @@ void io_run_node(uint16_t port, int sock) {
   actor_system_config cfg;
   cfg.load<io::middleman>();
   if (auto err = cfg.parse(0, nullptr))
-    exit(err);
+    exit("could not parse config", err);
   cfg.set("logger.file-name", "sink.log");
   actor_system sys{cfg};
   using io::network::scribe_impl;
@@ -141,22 +141,22 @@ void io_run_node(uint16_t port, int sock) {
     .receive(
       [&](node_id&, strong_actor_ptr& ptr, set<string>&) {
         if (ptr == nullptr)
-          exit("ERROR: could not get a handle to remote source");
+          exit("could not get a handle to remote source");
         auto sink = sys.spawn(pong_actor, actor_cast<actor>(ptr));
         anon_send(sink, start_atom_v);
       },
-      [&](error& err) { exit(err); });
+      [&](error& err) { exit("failed to resolve", err); });
 }
 
 void net_run_node(uri id, net::stream_socket sock) {
   actor_system_config cfg;
   cfg.load<net::middleman, net::backend::tcp>();
   if (auto err = cfg.parse(0, nullptr))
-    exit(err);
+    exit("could not parse config", err);
   cfg.set("logger.file-name", "sink.log");
   put(cfg.content, "middleman.this-node", id);
   if (auto err = cfg.parse(0, nullptr))
-    exit(err);
+    exit("could not parse config", err);
   actor_system sys{cfg};
   auto& mm = sys.network_manager();
   auto& backend = *dynamic_cast<net::backend::tcp*>(mm.backend("tcp"));

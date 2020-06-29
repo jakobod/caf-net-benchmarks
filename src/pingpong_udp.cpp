@@ -20,18 +20,15 @@
 #include <chrono>
 #include <functional>
 #include <iostream>
+#include <thread>
 
 #include "caf/actor_system_config.hpp"
 #include "caf/all.hpp"
 #include "caf/defaults.hpp"
-#include "caf/io/all.hpp"
-#include "caf/io/network/default_multiplexer.hpp"
-#include "caf/io/network/scribe_impl.hpp"
-#include "caf/io/scribe.hpp"
 #include "caf/ip_endpoint.hpp"
+#include "caf/net/all.hpp"
 #include "caf/net/backend/udp.hpp"
 #include "caf/net/basp/ec.hpp"
-#include "caf/net/datagram_socket.hpp"
 #include "caf/net/endpoint_manager.hpp"
 #include "caf/net/middleman.hpp"
 #include "caf/net/udp_datagram_socket.hpp"
@@ -68,9 +65,10 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
   return {
     [=](hello_atom, const actor& sink) {
       self->state.sinks.push_back(sink);
-      if (self->state.sinks.size() >= num_remote_nodes) {
+      std::cerr << "sent Hello atom from " << sink.id()
+                << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+      if (self->state.sinks.size() >= num_remote_nodes)
         self->send(self, start_atom_v);
-      }
     },
     [=](start_atom) {
       self->state.for_each([=](const auto& sink) {
@@ -98,7 +96,11 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
 
 behavior pong_actor(event_based_actor* self, const actor& source) {
   return {
-    [=](start_atom) { self->send(source, hello_atom_v, self); },
+    [=](start_atom) {
+      std::cerr << "sent Hello atom!! <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+                << std::endl;
+      self->send(source, hello_atom_v, self);
+    },
     [=](ping_atom) { return pong_atom_v; },
     [=](done_atom) { self->quit(); },
   };
@@ -107,19 +109,18 @@ behavior pong_actor(event_based_actor* self, const actor& source) {
 struct config : actor_system_config {
   config() {
     init_global_meta_objects<caf::id_block::caf_net_benchmark>();
-    io::middleman::init_global_meta_objects();
+    net::middleman::init_global_meta_objects();
     opt_group{custom_options_, "global"}
       .add(iterations, "iterations,i",
            "number of iterations that should be run")
       .add(num_remote_nodes, "num_nodes,n", "number of remote nodes")
       .add(num_pings, "pings,p", "number of pings to send");
-    source_id = *make_uri("udp://source");
     put(content, "middleman.this-node", source_id);
     load<net::middleman, net::backend::udp>();
     set("logger.file-name", "source.log");
   }
 
-  size_t iterations = 10;
+  size_t iterations = 1;
   size_t num_remote_nodes = 1;
   size_t num_pings = 1;
   uri source_id;
@@ -129,6 +130,8 @@ void net_run_source_node(uri this_node, const std::string& remote_str,
                          net::udp_datagram_socket sock, uint16_t port) {
   actor_system_config cfg;
   cfg.load<net::middleman, net::backend::udp>();
+  net::middleman::init_global_meta_objects();
+  init_global_meta_objects<caf::id_block::caf_net_benchmark>();
   if (auto err = cfg.parse(0, nullptr))
     exit(err);
   cfg.set("logger.file-name", "source.log");
@@ -157,45 +160,45 @@ void caf_main(actor_system&, const config& args) {
   cout << args.num_remote_nodes << ", ";
   ip_endpoint ep;
   if (auto err = parse("0.0.0.0:0", ep))
-    exit(to_string(err));
+    exit("could not parse endpoint", err);
   auto ret = net::make_udp_datagram_socket(ep);
   if (!ret)
     exit(ret.error());
-  auto sock = ret->first;
-  auto port = net::local_port(sock);
+  auto [sock, port] = *ret;
   auto this_node_str = "udp://127.0.0.1:" + to_string(port);
   auto this_node = make_uri(this_node_str);
   cerr << "ping_node = " << to_string(this_node) << endl;
   if (!this_node)
-    exit(this_node.error());
-  vector<thread> threads;
+    exit("make_uri failed", this_node.error());
   actor_system_config cfg;
   cfg.load<net::middleman, net::backend::udp>();
   if (auto err = cfg.parse(0, nullptr))
-    exit(err);
+    exit("could not parse config", err);
   cfg.set("logger.file-name", "ping.log");
   put(cfg.content, "middleman.this-node", *this_node);
   if (auto err = cfg.parse(0, nullptr))
-    exit(err);
+    exit("could not parse config", err);
   actor_system sys{cfg};
   auto ping = sys.spawn(ping_actor, args.num_remote_nodes, args.iterations,
                         args.num_pings);
   auto& mm = sys.network_manager();
   auto& backend = *dynamic_cast<net::backend::udp*>(mm.backend("udp"));
   // Overwrite the default initialized socket and port.
-  backend.emplace(sock, *port);
+  backend.emplace(sock, port);
   mm.publish(ping, "ping");
+  vector<thread> threads;
   for (size_t i = 0; i < args.num_remote_nodes; ++i) {
-    if (auto err = parse("0.0.0.0:0", ep))
-      exit(to_string(err));
     auto ret = net::make_udp_datagram_socket(ep);
     if (!ret)
       exit(ret.error());
-    auto sock = ret->first;
-    auto port = net::local_port(sock);
-    auto pong_id = *make_uri("udp://127.0.0.1:"s + to_string(*port));
-    auto f = [=]() {
-      net_run_source_node(pong_id, this_node_str, ret->first, *port);
+    auto [sock, port] = *ret;
+    auto pong_id = make_uri("udp://127.0.0.1:"s + to_string(port));
+    if (!pong_id)
+      exit("make_uri failed", pong_id.error());
+    cerr << "ping_id = " << to_string(*this_node)
+         << " pong_id = " << to_string(*pong_id) << endl;
+    auto f = [pong_id = *pong_id, this_node_str, sock = sock, port = port]() {
+      net_run_source_node(pong_id, this_node_str, sock, port);
     };
     threads.emplace_back(f);
   }
@@ -205,4 +208,4 @@ void caf_main(actor_system&, const config& args) {
 
 } // namespace
 
-CAF_MAIN(io::middleman)
+CAF_MAIN()
