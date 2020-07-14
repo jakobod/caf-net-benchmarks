@@ -5,7 +5,7 @@
  *                     | |___ / ___ \|  _|      Framework                     *
  *                      \____/_/   \_|_|                                      *
  *                                                                            *
- * Copyright (C) 2011 - 2019                                                  *
+ * Copyright (C) 2011 - 2020                                                  *
  * Jakob Otto <jakob.otto (at) haw-hamburg.de>                                *
  *                                                                            *
  * Distributed under the terms and conditions of the BSD 3-Clause License or  *
@@ -113,6 +113,7 @@ struct config : actor_system_config {
       .add(num_pings, "pings,p", "number of pings to send");
     source_id = *make_uri("tcp://source");
     put(content, "middleman.this-node", source_id);
+    put(content, "scheduler.max-threads", 1);
     load<net::middleman, net::backend::tcp>();
     set("logger.file-name", "source.log");
   }
@@ -155,6 +156,7 @@ void net_run_node(uri id, net::stream_socket sock) {
     exit("could not parse config", err);
   cfg.set("logger.file-name", "sink.log");
   put(cfg.content, "middleman.this-node", id);
+  put(cfg.content, "scheduler.max-threads", 1);
   if (auto err = cfg.parse(0, nullptr))
     exit("could not parse config", err);
   actor_system sys{cfg};
@@ -163,12 +165,10 @@ void net_run_node(uri id, net::stream_socket sock) {
   auto source_id = *make_uri("tcp://source/name/source");
   auto ret = backend.emplace(make_node_id(*source_id.authority_only()), sock);
   if (!ret)
-    cerr << "emplace failed with err: " << to_string(ret.error()) << endl;
-  auto source = mm.remote_actor(source_id, infinite);
-  if (!source) {
-    cerr << "got error while resolving: " << to_string(source.error()) << endl;
-    abort(); // kill this thread and everything else!
-  }
+    exit("emplace failed", ret.error());
+  auto source = mm.remote_actor(source_id);
+  if (!source)
+    exit("remote_actor failed", source.error());
   auto sink = sys.spawn(pong_actor, *source);
   anon_send(sink, start_atom_v);
   scoped_actor self{sys};
@@ -182,7 +182,7 @@ void caf_main(actor_system& sys, const config& cfg) {
   cout << cfg.num_remote_nodes << ", ";
   switch (convert(cfg.mode)) {
     case bench_mode::io: {
-      cerr << "run in 'ioBench' mode" << endl;
+      std::cerr << "run in 'ioBench' mode" << endl;
       using io::network::scribe_impl;
       auto& mm = sys.middleman();
       auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
@@ -212,11 +212,11 @@ void caf_main(actor_system& sys, const config& cfg) {
       break;
     }
     default:
-      cerr << "mode is invalid: " << cfg.mode << endl;
+      exit("invalid mode: \""s + cfg.mode + "\"");
   }
   for (auto& t : threads)
     t.join();
-  cerr << endl;
+  std::cerr << endl;
 }
 
 } // namespace

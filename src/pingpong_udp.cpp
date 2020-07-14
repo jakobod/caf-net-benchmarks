@@ -116,6 +116,7 @@ struct config : actor_system_config {
       .add(num_remote_nodes, "num_nodes,n", "number of remote nodes")
       .add(num_pings, "pings,p", "number of pings to send");
     put(content, "middleman.this-node", source_id);
+    put(content, "scheduler.max-threads", 1);
     load<net::middleman, net::backend::udp>();
     set("logger.file-name", "source.log");
   }
@@ -136,6 +137,7 @@ void net_run_source_node(uri this_node, const std::string& remote_str,
     exit(err);
   cfg.set("logger.file-name", "source.log");
   put(cfg.content, "middleman.this-node", this_node);
+  put(content, "scheduler.max-threads", 1);
   cerr << "pong_node " << to_string(this_node) << endl;
   if (auto err = cfg.parse(0, nullptr))
     exit(err);
