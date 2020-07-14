@@ -204,7 +204,6 @@ void net_run_source(net::stream_socket sock, size_t id) {
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
-  cout << cfg.num_remote_nodes << ", ";
   vector<thread> threads;
   auto accumulator = sys.spawn(accumulator_actor, cfg.num_remote_nodes);
   switch (convert(cfg.mode)) {

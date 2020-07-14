@@ -15,8 +15,12 @@ for pings in 1 10 100; do
   net_file="${output_folder}/pingpong-net-${pings}-pings"
   init_file ${net_file}
   for num_nodes in {1..64..1}; do
-    echo "starting netBench-${num_nodes} nodes"
-    ./release/pingpong_tcp -mnetBench -n${num_nodes} -p${pings} >> ${net_file}.out 2> ${net_file}.err
+    printf ${num_nodes} >> ${net_file}
+    while : ; do
+      echo "starting netBench-${num_nodes} nodes"
+      ./release/pingpong_tcp -mnetBench -n${num_nodes} -p${pings} >> ${net_file}.out 2> ${net_file}.err
+      [[ $? != 0 ]] || break # if program exited with error rerun it.
+    done;
   done;
 done;
 
@@ -27,7 +31,11 @@ for pings in 1 10 100; do
   io_file="${output_folder}/pingpong-io-${pings}-pings"
   init_file ${io_file}
   for num_nodes in {1..64..1}; do
-    echo "starting ioBench-${num_nodes} nodes"
-    ./release/pingpong_tcp -mioBench -n${num_nodes} -p${pings} >> ${io_file}.out 2> ${io_file}.err
+    printf ${num_nodes} >> ${io_file}
+    while : ; do
+      echo "starting ioBench-${num_nodes} nodes"
+      ./release/pingpong_tcp -mioBench -n${num_nodes} -p${pings} >> ${io_file}.out 2> ${io_file}.err
+      [[ $? != 0 ]] || break # if program exited with error rerun it.
+    done;
   done;
 done;
