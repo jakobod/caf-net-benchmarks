@@ -36,6 +36,7 @@ CAF_ADD_ATOM(caf_net_benchmark, stop_atom)
 CAF_ADD_ATOM(caf_net_benchmark, done_atom)
 CAF_ADD_ATOM(caf_net_benchmark, io_bench_atom)
 CAF_ADD_ATOM(caf_net_benchmark, net_bench_atom)
-CAF_ADD_ATOM(caf_net_benchmark, local_ench_atom)
+CAF_ADD_ATOM(caf_net_benchmark, local_bench_atom)
+CAF_ADD_ATOM(caf_net_benchmark, hello_atom)
 
 CAF_END_TYPE_ID_BLOCK(caf_net_benchmark)
