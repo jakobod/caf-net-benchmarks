@@ -5,17 +5,17 @@ require(gridExtra)
 
 source("evaluation/human_readable.R")
 
-streaming_net_master <- read.csv("evaluation/data/streaming-net-master.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
-streaming_net_master$avg <- rowMeans(streaming_net_master[,2:11])
-streaming_net_master$sdev <- apply(streaming_net_master[,2:11], 1, sd)
-streaming_net_master$proto <- '1 net - master'
+streaming_net <- read.csv("evaluation/data/streaming-net.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+streaming_net$avg <- rowMeans(streaming_net[,2:11])
+streaming_net$sdev <- apply(streaming_net[,2:11], 1, sd)
+streaming_net$proto <- 'libcaf_net'
 
 streaming_io <- read.csv("evaluation/data/streaming-io.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 streaming_io$avg <- rowMeans(streaming_io[,2:11])
 streaming_io$sdev <- apply(streaming_io[,2:11], 1, sd)
 streaming_io$proto <- '2 io'
 
-ppdf <- rbind(streaming_net_master, streaming_io)
+ppdf <- rbind(streaming_net, streaming_io)
 ppdf$upper <- ppdf$avg + ppdf$sdev
 ppdf$lower <- ppdf$avg - ppdf$sdev
 
@@ -29,8 +29,8 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
     ),
     width=0.2
   ) +
-  scale_x_continuous(breaks=seq(1, 32, 1)) + # expand=c(0, 0), limits=c(0, 10)
-  scale_y_continuous(labels = human_numbers, limits=c(12000000,36000000), breaks=seq(12000000, 36000000, 1000000)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_x_continuous(breaks=seq(1, 64, 2)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_y_continuous(labels = human_numbers, limits=c(10000000,22000000), breaks=seq(10000000, 22000000, 1000000)) + # expand=c(0, 0), limits=c(0, 10)
   theme_bw() +
   theme(
     legend.title=element_blank(),
@@ -49,7 +49,7 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
   ggtitle("Streaming") +
   labs(x="remote nodes [#]", y="throughput [messages/s]")
 
-tikz(file="figs/streaming.tikz", sanitize=TRUE, width=3.4, height=2.3)
+# tikz(file="figs/streaming.tikz", sanitize=TRUE, width=3.4, height=2.3)
 pp_plot
 dev.off()
 

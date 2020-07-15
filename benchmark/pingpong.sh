@@ -4,12 +4,18 @@ output_folder="evaluation/out"
 rm -rf ${output_folder}
 mkdir -p ${output_folder}
 
+duration=60
+
 function init_file() {
-  echo "num_pings, value1, value2, value3, value4, value5, value6, value7, value8, value9, value10," > ${1}.out
+  printf "num_pings" > ${1}.out
+  for i in {1..${duration}..1}; do
+    echo "value${i}, " >> ${1}.out
+  done;
+  echo "" >> ${1}.out
 }
 
 # -- netBenchmark -------------------------------------------------------------
-:
+
 for pings in 1 10 100; do
   echo "------------------------ ${pings} pings ------------------------"
   net_file="${output_folder}/pingpong-net-${pings}-pings"
@@ -18,7 +24,7 @@ for pings in 1 10 100; do
     printf ${num_nodes} >> ${net_file}
     while : ; do
       echo "starting netBench-${num_nodes} nodes"
-      ./release/pingpong_tcp -mnetBench -n${num_nodes} -p${pings} >> ${net_file}.out 2> ${net_file}.err
+      ./release/pingpong_tcp -mnetBench -n${num_nodes} -p${pings} -i${duration} >> ${net_file}.out 2> ${net_file}.err
       [[ $? != 0 ]] || break # if program exited with error rerun it.
     done;
   done;
@@ -34,7 +40,7 @@ for pings in 1 10 100; do
     printf ${num_nodes} >> ${io_file}
     while : ; do
       echo "starting ioBench-${num_nodes} nodes"
-      ./release/pingpong_tcp -mioBench -n${num_nodes} -p${pings} >> ${io_file}.out 2> ${io_file}.err
+      ./release/pingpong_tcp -mioBench -n${num_nodes} -p${pings} -i${duration} >> ${io_file}.out 2> ${io_file}.err
       [[ $? != 0 ]] || break # if program exited with error rerun it.
     done;
   done;
