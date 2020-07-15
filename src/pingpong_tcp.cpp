@@ -131,6 +131,7 @@ void io_run_node(uint16_t port, int sock) {
   if (auto err = cfg.parse(0, nullptr))
     exit("could not parse config", err);
   cfg.set("logger.file-name", "sink.log");
+  put(cfg.content, "scheduler.max-threads", 1);
   actor_system sys{cfg};
   using io::network::scribe_impl;
   auto& mm = sys.middleman();

@@ -139,6 +139,7 @@ struct config : actor_system_config {
 
     earth_id = *make_uri("tcp://earth");
     put(content, "middleman.this-node", earth_id);
+    put(content, "scheduler.max-threads", 1);
     load<net::middleman, net::backend::tcp>();
     set("logger.file-name", "source.log");
   }
@@ -155,6 +156,7 @@ void io_run_source(net::stream_socket sock, uint16_t port) {
   if (auto err = cfg.parse(0, nullptr))
     exit(err);
   cfg.set("logger.file-name", "sink.log");
+  put(cfg.content, "scheduler.max-threads", 1);
   actor_system sys{cfg};
   using io::network::scribe_impl;
   auto& mm = sys.middleman();
@@ -183,6 +185,7 @@ void net_run_source(net::stream_socket sock, size_t id) {
     exit(err);
   cfg.set("logger.file-name", "sink.log");
   put(cfg.content, "middleman.this-node", source_id);
+  put(cfg.content, "scheduler.max-threads", 1);
   if (auto err = cfg.parse(0, nullptr))
     exit(err);
   actor_system sys{cfg};

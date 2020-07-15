@@ -15,7 +15,7 @@ pingpong_net$avg <- rowMeans(pingpong_net[,2:11])
 pingpong_net$sdev <- apply(pingpong_net[,2:11], 1, sd)
 pingpong_net$proto <- 'libcaf_net'
 
-pingpong_net_vector <- read.csv("evaluation/data/pingpong-net-100-pings-vector.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+pingpong_net_vector <- read.csv("evaluation/data/pingpong-net-100-pings-vec.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 pingpong_net_vector$avg <- rowMeans(pingpong_net_vector[,2:11])
 pingpong_net_vector$sdev <- apply(pingpong_net_vector[,2:11], 1, sd)
 pingpong_net_vector$proto <- 'libcaf_net - vector'
