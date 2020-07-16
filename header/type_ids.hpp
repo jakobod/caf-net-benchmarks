@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <vector>
 
@@ -26,17 +27,19 @@
 
 CAF_BEGIN_TYPE_ID_BLOCK(caf_net_benchmark, caf::first_custom_type_id)
 
-CAF_ADD_TYPE_ID(caf_net_benchmark, (std::vector<uint64_t>) )
-CAF_ADD_TYPE_ID(caf_net_benchmark, (caf::stream<uint64_t>) )
-CAF_ADD_TYPE_ID(caf_net_benchmark, (caf::stream<std::vector<uint64_t>>) )
-CAF_ADD_TYPE_ID(caf_net_benchmark, (std::vector<std::vector<uint64_t>>) )
+  CAF_ADD_TYPE_ID(caf_net_benchmark, (std::vector<uint64_t>) )
+  CAF_ADD_TYPE_ID(caf_net_benchmark, (caf::stream<uint64_t>) )
+  CAF_ADD_TYPE_ID(caf_net_benchmark, (caf::stream<std::vector<uint64_t>>) )
+  CAF_ADD_TYPE_ID(caf_net_benchmark, (std::vector<std::vector<uint64_t>>) )
+  CAF_ADD_TYPE_ID(caf_net_benchmark, (std::vector<std::chrono::microseconds>) )
+  CAF_ADD_TYPE_ID(caf_net_benchmark, (std::chrono::microseconds))
 
-CAF_ADD_ATOM(caf_net_benchmark, start_atom)
-CAF_ADD_ATOM(caf_net_benchmark, stop_atom)
-CAF_ADD_ATOM(caf_net_benchmark, done_atom)
-CAF_ADD_ATOM(caf_net_benchmark, io_bench_atom)
-CAF_ADD_ATOM(caf_net_benchmark, net_bench_atom)
-CAF_ADD_ATOM(caf_net_benchmark, local_bench_atom)
-CAF_ADD_ATOM(caf_net_benchmark, hello_atom)
+  CAF_ADD_ATOM(caf_net_benchmark, start_atom)
+  CAF_ADD_ATOM(caf_net_benchmark, stop_atom)
+  CAF_ADD_ATOM(caf_net_benchmark, done_atom)
+  CAF_ADD_ATOM(caf_net_benchmark, io_bench_atom)
+  CAF_ADD_ATOM(caf_net_benchmark, net_bench_atom)
+  CAF_ADD_ATOM(caf_net_benchmark, local_bench_atom)
+  CAF_ADD_ATOM(caf_net_benchmark, hello_atom)
 
 CAF_END_TYPE_ID_BLOCK(caf_net_benchmark)

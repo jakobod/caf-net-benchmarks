@@ -137,7 +137,7 @@ void net_run_source_node(uri this_node, const std::string& remote_str,
     exit(err);
   cfg.set("logger.file-name", "source.log");
   put(cfg.content, "middleman.this-node", this_node);
-  put(content, "scheduler.max-threads", 1);
+  put(cfg.content, "scheduler.max-threads", 1);
   cerr << "pong_node " << to_string(this_node) << endl;
   if (auto err = cfg.parse(0, nullptr))
     exit(err);
