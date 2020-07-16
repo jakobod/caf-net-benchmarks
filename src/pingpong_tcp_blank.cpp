@@ -95,6 +95,11 @@ int main() {
   byte_buffer buf(2 * payload_size);
   size_t received = 0;
   auto sockets = *make_connected_tcp_socket_pair();
+  // libcaf_io and libcaf_net both set nodelay options.
+  if (auto err = nodelay(sockets.first, true))
+    exit(err);
+  if (auto err = nodelay(sockets.second, true))
+    exit(err);
   auto client_guard = make_socket_guard(sockets.first);
   auto serv_guard = make_socket_guard(sockets.second);
   auto f = [=]() { echo_server(sockets.second); };
@@ -122,12 +127,15 @@ int main() {
   serv_thread.join();
   std::cerr << "received " << std::to_string(max) << " number of pings"
             << std::endl;
+  std::cout << "what, ";
   for (size_t i = 0; i < t3.size(); ++i)
     std::cout << "value" << std::to_string(i) << ", ";
   std::cout << std::endl;
+  std::cout << "request, ";
   for (size_t i = 0; i < t3.size(); ++i)
     std::cout << std::to_string(t2.at(i) - t1.at(i)) << ", ";
   std::cout << std::endl;
+  std::cout << "response, ";
   for (size_t i = 0; i < t3.size(); ++i)
     std::cout << std::to_string(t3.at(i) - t2.at(i)) << ", ";
   std::cout << std::endl;

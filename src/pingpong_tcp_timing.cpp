@@ -219,12 +219,15 @@ void caf_main(actor_system& sys, const config& cfg) {
   }
   self->receive([&](done_atom, vector<microseconds> t1, vector<microseconds> t2,
                     vector<microseconds> t3) {
+    std::cout << "what, ";
     for (size_t i = 0; i < t3.size(); ++i)
       std::cout << "value"s + to_string(i) + ", ";
     std::cout << std::endl;
+    std::cout << "request, ";
     for (size_t i = 0; i < t3.size(); ++i)
       std::cout << to_string(t2.at(i).count() - t1.at(i).count()) + ", ";
     std::cout << std::endl;
+    std::cout << "response, ";
     for (size_t i = 0; i < t3.size(); ++i)
       std::cout << to_string(t3.at(i).count() - t2.at(i).count()) + ", ";
     std::cout << std::endl;
