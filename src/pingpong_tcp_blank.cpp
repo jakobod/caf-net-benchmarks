@@ -125,11 +125,9 @@ int main() {
   for (size_t i = 0; i < t3.size(); ++i)
     std::cout << "value" << std::to_string(i) << ", ";
   std::cout << std::endl;
-
   for (size_t i = 0; i < t3.size(); ++i)
     std::cout << std::to_string(t2.at(i) - t1.at(i)) << ", ";
   std::cout << std::endl;
-
   for (size_t i = 0; i < t3.size(); ++i)
     std::cout << std::to_string(t3.at(i) - t2.at(i)) << ", ";
   std::cout << std::endl;

@@ -222,16 +222,12 @@ void caf_main(actor_system& sys, const config& cfg) {
     for (size_t i = 0; i < t3.size(); ++i)
       std::cout << "value"s + to_string(i) + ", ";
     std::cout << std::endl;
-
     for (size_t i = 0; i < t3.size(); ++i)
       std::cout << to_string(t2.at(i).count() - t1.at(i).count()) + ", ";
     std::cout << std::endl;
-
     for (size_t i = 0; i < t3.size(); ++i)
       std::cout << to_string(t3.at(i).count() - t2.at(i).count()) + ", ";
     std::cout << std::endl;
-
-    std::cout << "amounts = " << t3.size() << std::endl;
   });
   t.join();
   std::cerr << endl;
