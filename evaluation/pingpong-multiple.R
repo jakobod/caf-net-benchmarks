@@ -34,10 +34,10 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
       ymin=lower,
       ymax=upper
     ),
-    width=0.2
+    width=0.4
   ) +
   scale_x_continuous(breaks=seq(1, 64, 2)) + # expand=c(0, 0), limits=c(0, 10)
-  scale_y_continuous(labels = human_numbers, limits=c(0,90000), breaks=seq(0, 90000, 5000)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_y_continuous(labels = human_numbers, limits=c(0,120000), breaks=seq(0, 120000, 10000)) + # expand=c(0, 0), limits=c(0, 10)
   theme_bw() +
   theme(
     legend.title=element_blank(),
