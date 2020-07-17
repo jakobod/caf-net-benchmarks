@@ -10,8 +10,6 @@ streaming_net$avg <- rowMeans(streaming_net[,2:60])
 streaming_net$sdev <- apply(streaming_net[,2:60], 1, sd)
 streaming_net$proto <- 'libcaf_net'
 
-message(streaming_net$avg)
-
 streaming_io <- read.csv("evaluation/data/streaming-io-60.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 streaming_io$avg <- rowMeans(streaming_io[,2:60])
 streaming_io$sdev <- apply(streaming_io[,2:60], 1, sd)

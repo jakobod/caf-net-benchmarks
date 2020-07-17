@@ -96,11 +96,7 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
 
 behavior pong_actor(event_based_actor* self, const actor& source) {
   return {
-    [=](start_atom) {
-      std::cerr << "sent Hello atom!! <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
-                << std::endl;
-      self->send(source, hello_atom_v, self);
-    },
+    [=](start_atom) { self->send(source, hello_atom_v, self); },
     [=](ping_atom) { return pong_atom_v; },
     [=](done_atom) { self->quit(); },
   };
