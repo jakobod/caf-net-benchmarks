@@ -20,7 +20,7 @@ pingpong_net_vector$avg <- rowMeans(pingpong_net_vector[,2:100])
 pingpong_net_vector$sdev <- apply(pingpong_net_vector[,2:100], 1, sd)
 pingpong_net_vector$proto <- 'libcaf_net - vector'
 
-ppdf <- rbind(pingpong_io, pingpong_net, pingpong_net_vector)
+ppdf <- rbind(pingpong_io, pingpong_net_vector)
 ppdf$upper <- ppdf$avg + ppdf$sdev
 ppdf$lower <- ppdf$avg - ppdf$sdev
 
