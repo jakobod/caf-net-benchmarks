@@ -116,7 +116,7 @@ struct config : actor_system_config {
     set("logger.file-name", "source.log");
   }
 
-  size_t iterations = 1;
+  size_t iterations = 10;
   size_t num_remote_nodes = 1;
   size_t num_pings = 1;
   uri source_id;
@@ -140,15 +140,17 @@ void net_run_source_node(uri this_node, const std::string& remote_str,
   auto& mm = sys.network_manager();
   auto& backend = *dynamic_cast<net::backend::udp*>(mm.backend("udp"));
   // reset the created endpoint manager with a new one using the passed socket
-  auto ret = backend.emplace(sock, port);
-  if (!ret)
-    exit(ret.error());
+  auto be = backend.emplace(sock, port);
+  if (!be)
+    exit(be.error());
   auto remote_locator = make_uri(remote_str + "/name/ping");
   if (!remote_locator)
     exit(remote_locator.error());
-  auto source = mm.remote_actor(*remote_locator);
+  std::cerr << "resolving now" << std::endl;
+  auto source = mm.remote_actor(*remote_locator, 1s);
   if (!source)
-    exit(to_string(source.error()));
+    exit(source.error());
+  std::cerr << "resolve done" << std::endl;
   auto sink = sys.spawn(pong_actor, *source);
   anon_send(sink, start_atom_v);
 }
