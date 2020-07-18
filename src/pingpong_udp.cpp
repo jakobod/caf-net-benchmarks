@@ -65,8 +65,10 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
   return {
     [=](hello_atom, const actor& sink) {
       self->state.sinks.push_back(sink);
-      if (self->state.sinks.size() >= num_remote_nodes)
+      if (self->state.sinks.size() >= num_remote_nodes) {
+        cerr << "got hellos from all remote nodes" << endl;
         self->send(self, start_atom_v);
+      }
     },
     [=](start_atom) {
       std::cout << "start" << std::endl;
@@ -137,6 +139,7 @@ void net_run_source_node(uri this_node, const std::string& remote_str,
   if (auto err = cfg.parse(0, nullptr))
     exit(err);
   actor_system sys{cfg};
+  // std::this_thread::sleep_for(1s);
   auto& mm = sys.network_manager();
   auto& backend = *dynamic_cast<net::backend::udp*>(mm.backend("udp"));
   // reset the created endpoint manager with a new one using the passed socket
@@ -147,7 +150,7 @@ void net_run_source_node(uri this_node, const std::string& remote_str,
   if (!remote_locator)
     exit(remote_locator.error());
   std::cerr << "resolving now" << std::endl;
-  auto source = mm.remote_actor(*remote_locator, 1s);
+  auto source = mm.remote_actor(*remote_locator, 10s);
   if (!source)
     exit(source.error());
   std::cerr << "resolve done" << std::endl;
