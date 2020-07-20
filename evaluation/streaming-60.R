@@ -21,7 +21,7 @@ ppdf$lower <- ppdf$avg - ppdf$sdev
 
 pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
   geom_line() + # size=0.8) +
-  geom_point(aes(shape=proto), size = 2, stroke=0.8) +
+  geom_point(aes(shape=proto), size = 2, stroke=0.2) +
   geom_errorbar(
     mapping=aes(
       ymin=lower,
@@ -29,8 +29,8 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
     ),
     width=0.4
   ) +
-  scale_x_continuous(breaks=seq(1, 64, 2)) + # expand=c(0, 0), limits=c(0, 10)
-  scale_y_continuous(labels = human_numbers, limits=c(10000000,22000000), breaks=seq(10000000, 22000000, 1000000)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_x_continuous(breaks=seq(1, 64, 3)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_y_continuous(labels = human_numbers, limits=c(12800000,22000000), breaks=seq(13000000, 22000000, 1000000)) + # expand=c(0, 0), limits=c(0, 10)
   theme_bw() +
   theme(
     legend.title=element_blank(),
@@ -38,7 +38,7 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
     legend.background=element_rect(fill="white", colour="black", size=0.25),
     legend.direction="vertical",
     legend.justification=c(0, 1),
-    legend.position=c(0,1),
+    legend.position=c(0.85,1),
     legend.box.margin=margin(c(3, 3, 3, 3)),
     legend.key.height=unit(0.4,"line"),
     legend.key.size=unit(0.6, 'lines'),
@@ -54,5 +54,5 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
 pp_plot
 dev.off()
 
-ggsave("figs/streaming-60.pdf", plot=pp_plot, width=8, height=5)
+ggsave("figs/streaming-60.pdf", plot=pp_plot, width=6, height=3.75)
 

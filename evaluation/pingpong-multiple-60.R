@@ -34,8 +34,8 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
     ),
     width=0.4
   ) +
-  scale_x_continuous(breaks=seq(1, 64, 2)) + # expand=c(0, 0), limits=c(0, 10)
-  scale_y_continuous(labels = human_numbers, limits=c(0,125000), breaks=seq(0, 125000, 10000)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_x_continuous(breaks=seq(1, 64, 3)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_y_continuous(labels = human_numbers, limits=c(0,125000), breaks=seq(0, 125000, 25000)) + # expand=c(0, 0), limits=c(0, 10)
   theme_bw() +
   theme(
     legend.title=element_blank(),
@@ -58,5 +58,5 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
 pp_plot
 dev.off()
 
-ggsave("figs/pingpong-1-ping-100.pdf", plot=pp_plot, width=8, height=5)
+ggsave("figs/pingpong-1-ping-100.pdf", plot=pp_plot, width=6, height=3.75)
 

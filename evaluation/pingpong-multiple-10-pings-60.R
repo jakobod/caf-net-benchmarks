@@ -27,16 +27,16 @@ ppdf$lower <- ppdf$avg - ppdf$sdev
 
 pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
   geom_line() + # size=0.8) +
-  geom_point(aes(shape=proto), size = 1, stroke=0.8) +
+  geom_point(aes(shape=proto), size = 1, stroke=0.2) +
   geom_errorbar(
     mapping=aes(
       ymin=lower,
       ymax=upper
     ),
-    width=0.4
+    width=0.6
   ) +
-  scale_x_continuous(breaks=seq(1, 64, 2)) + # expand=c(0, 0), limits=c(0, 10)
-  scale_y_continuous(labels = human_numbers, limits=c(40000,270000), breaks=seq(40000, 270000, 10000)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_x_continuous(breaks=seq(1, 64, 3)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_y_continuous(labels = human_numbers, limits=c(40000,400000), breaks=seq(40000, 400000, 25000)) + # expand=c(0, 0), limits=c(0, 10)
   theme_bw() +
   theme(
     legend.title=element_blank(),
@@ -59,5 +59,5 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
 pp_plot
 dev.off()
 
-ggsave("figs/pingpong-10-ping-100.pdf", plot=pp_plot, width=8, height=5)
+ggsave("figs/pingpong-10-ping-100.pdf", plot=pp_plot, width=4, height=3)
 

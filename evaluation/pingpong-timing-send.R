@@ -26,12 +26,12 @@ pp_plot <- ggplot(ppdf, aes(x=backend, y=avg, fill=backend)) +
   geom_bar(stat="identity", position=position_dodge()) +
   geom_errorbar(aes(ymin=lower, ymax=upper), width=.2,
                 position=position_dodge(.9))+
-  ggtitle("Receiving durations in Pingpong") +
-  labs(x="Interval", y="duration [µs]")
+  ggtitle("Message processing duration of outgoing messages") +
+  labs(x="Implementation", y="duration [µs]")
   
 # tikz(file="figs/pingpong-timings.tikz", sanitize=TRUE, width=3.4, height=2.3)
 pp_plot
 dev.off()
 
-ggsave("figs/timings_send.pdf", plot=pp_plot, width=8, height=5)
+ggsave("figs/timings_send.pdf", plot=pp_plot, width=5, height=5)
 

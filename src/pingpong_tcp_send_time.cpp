@@ -72,6 +72,9 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
     },
     [=](tick_atom) {
       self->delayed_send(self, seconds(1), tick_atom_v);
+      auto ts = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::system_clock::now().time_since_epoch());
+      std::cout << std::to_string(ts.count()) << ", ";
       self->state.for_each(
         [=](const auto& sink) { self->send(sink, ping_atom_v); });
     },
@@ -83,10 +86,7 @@ behavior pong_actor(event_based_actor* self, const actor& source) {
   return {
     [=](start_atom) { self->send(source, hello_atom_v, self); },
     [=](ping_atom) {
-      static size_t count = 0;
-      auto ts = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::system_clock::now().time_since_epoch());
-      std::cout << std::to_string(ts.count()) << ", " << std::endl;
+
     },
     [=](done_atom) { self->quit(); },
   };
