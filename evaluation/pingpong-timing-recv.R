@@ -5,40 +5,33 @@ require(gridExtra)
 
 source("evaluation/human_readable.R")
 
-pingpong_net_master_full <- read.csv("evaluation/data/pingpong-timing-net.out", sep=",")
-pingpong_net_master <- pingpong_net_master_full[ ,1:ncol(pingpong_net_master_full)-1]
-pingpong_net_master$avg <- rowMeans(pingpong_net_master[,2:ncol(pingpong_net_master)])
-pingpong_net_master$sdev <- apply(pingpong_net_master[ ,2:ncol(pingpong_net_master)], 1, sd)
-pingpong_net_master$backend <- 'net'
+net <- read.csv("evaluation/data/recv_timing_net_processed.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+net$avg <- rowMeans(net[,2:62])
+net$sdev <- apply(net[,2:62], 1, sd)
+net$backend <- 'libcaf_net'
 
-pingpong_io_full <- read.csv("evaluation/data/pingpong-timing-io.out", sep=",")
-pingpong_io <- pingpong_io_full[ ,1:ncol(pingpong_net_master_full)-1]
-pingpong_io$avg <- rowMeans(pingpong_io[,2:ncol(pingpong_io)])
-pingpong_io$sdev <- apply(pingpong_io[,2:ncol(pingpong_io)], 1, sd)
-pingpong_io$backend <- 'io'
+io <- read.csv("evaluation/data/recv_timing_io_processed.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+io$avg <- rowMeans(io[,2:62])
+io$sdev <- apply(io[,2:62], 1, sd)
+io$backend <- 'libcaf_io'
 
+print(io$sdev)
 
-ppdf <- rbind(pingpong_net_master, pingpong_io)
+ppdf <- rbind(net, io)
 ppdf$upper <- ppdf$avg + ppdf$sdev
 ppdf$lower <- ppdf$avg - ppdf$sdev
 
-print(pingpong_io$sdev)
-print(pingpong_net_master$sdev)
-
-print(ppdf$upper)
-print(ppdf$lower)
-
-pp_plot <- ggplot(ppdf, aes(x=what, y=avg, fill=backend)) + 
-  scale_y_continuous(labels = human_numbers, limits=c(0,115), breaks=seq(0, 110, 10)) +
+pp_plot <- ggplot(ppdf, aes(x=num, y=avg, fill=backend)) + 
+  scale_y_continuous(labels = human_numbers, limits=c(0,70), breaks=seq(0, 70, 5)) +
   geom_bar(stat="identity", position=position_dodge()) +
   geom_errorbar(aes(ymin=lower, ymax=upper), width=.2,
                 position=position_dodge(.9))+
   ggtitle("Receiving durations in Pingpong") +
   labs(x="Interval", y="duration [µs]")
-  
+
 # tikz(file="figs/pingpong-timings.tikz", sanitize=TRUE, width=3.4, height=2.3)
 pp_plot
 dev.off()
 
-ggsave("figs/pingpong-timings-recv.pdf", plot=pp_plot, width=8, height=5)
+ggsave("figs/timings_recv.pdf", plot=pp_plot, width=8, height=5)
 
