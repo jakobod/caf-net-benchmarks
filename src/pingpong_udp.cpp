@@ -99,7 +99,10 @@ behavior pong_actor(event_based_actor* self, const actor& source) {
   return {
     [=](start_atom) { self->send(source, hello_atom_v, self); },
     [=](ping_atom) { return pong_atom_v; },
-    [=](done_atom) { self->quit(); },
+    [=](done_atom) {
+      aout(self) << "got done atom, quitting now.\n";
+      self->quit();
+    },
   };
 }
 
