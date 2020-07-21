@@ -45,7 +45,6 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
     text=element_text(size=9),
     strip.text.x=element_blank()
   ) +
-  scale_color_brewer(type="qual", palette=6) +
   scale_fill_brewer(palette="Dark2") +
   ggtitle("Streaming") +
   labs(x="remote nodes [#]", y="throughput [messages/s]")

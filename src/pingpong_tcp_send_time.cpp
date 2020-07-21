@@ -72,9 +72,6 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
     },
     [=](tick_atom) {
       self->delayed_send(self, seconds(1), tick_atom_v);
-      auto ts = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::system_clock::now().time_since_epoch());
-      std::cout << std::to_string(ts.count()) << ", ";
       self->state.for_each(
         [=](const auto& sink) { self->send(sink, ping_atom_v); });
     },
@@ -86,7 +83,9 @@ behavior pong_actor(event_based_actor* self, const actor& source) {
   return {
     [=](start_atom) { self->send(source, hello_atom_v, self); },
     [=](ping_atom) {
-
+      auto ts = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::system_clock::now().time_since_epoch());
+      std::cout << std::to_string(ts.count()) << ", " << std::endl;
     },
     [=](done_atom) { self->quit(); },
   };
@@ -105,6 +104,7 @@ struct config : actor_system_config {
     source_id = *make_uri("tcp://source");
     put(content, "middleman.this-node", source_id);
     put(content, "scheduler.max-threads", 1);
+    put(content, "middleman.workers", 1);
     load<net::middleman, net::backend::tcp>();
     set("logger.file-name", "source.log");
   }
@@ -123,6 +123,7 @@ void io_run_node(uint16_t port, int sock) {
     exit("could not parse config", err);
   cfg.set("logger.file-name", "sink.log");
   put(cfg.content, "scheduler.max-threads", 1);
+  put(cfg.content, "middleman.workers", 1);
   actor_system sys{cfg};
   using io::network::scribe_impl;
   auto& mm = sys.middleman();

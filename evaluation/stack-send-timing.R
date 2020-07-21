@@ -16,18 +16,19 @@ ppdf <- rbind(net)
 ppdf$upper <- ppdf$avg + ppdf$sdev
 ppdf$lower <- ppdf$avg - ppdf$sdev
 
+mylabels <- c('send','enqueue','event','dequeue', 'process', 'write')
 
-pp_plot <- ggplot(ppdf, aes(x = factor(num, level = c('send','enqueue','event','dequeue', 'application', 'write')), y = avg, fill=backend)) + 
-  scale_y_continuous(labels = human_numbers, limits=c(0,65), breaks=seq(0, 65, 5)) +
+pp_plot <- ggplot(ppdf, aes(x = num, y = avg, fill=backend)) + 
+  scale_x_discrete(labels = mylabels) +
+  scale_y_continuous(labels = human_numbers, limits=c(0,65), breaks=seq(0, 65, 10)) +
   geom_bar(stat="identity", position=position_dodge()) +
   geom_errorbar(aes(ymin=lower, ymax=upper), width=.2,
                 position=position_dodge(.9))+
-  theme(legend.position = "none") +
-  ggtitle("Duration of sending a message") +
+  theme(text = element_text(size=27), legend.position = "none") +
   labs(x="task", y="duration [µs]")
 
 pp_plot
 dev.off()
 
-ggsave("figs/stack-timings-send.pdf", plot=pp_plot, width=6, height=4)
+ggsave("figs/stack-timings-send.pdf", plot=pp_plot, width=9, height=5)
 

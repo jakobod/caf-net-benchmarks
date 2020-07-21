@@ -22,11 +22,11 @@ ppdf$upper <- ppdf$avg + ppdf$sdev
 ppdf$lower <- ppdf$avg - ppdf$sdev
 
 pp_plot <- ggplot(ppdf, aes(x=num, y=avg, fill=backend)) + 
-  scale_y_continuous(labels = human_numbers, limits=c(0,180), breaks=seq(0, 180, 10)) +
+  scale_y_continuous(labels = human_numbers, limits=c(0,180), breaks=seq(0, 180, 20)) +
   geom_bar(stat="identity", position=position_dodge()) +
   geom_errorbar(aes(ymin=lower, ymax=upper), width=.2,
                 position=position_dodge(.9))+
-  ggtitle("Message processing durations for messages") +
+#  ggtitle("Message processing durations for messages") +
   labs(x="path", y="duration [µs]")
 
 
@@ -34,5 +34,5 @@ pp_plot <- ggplot(ppdf, aes(x=num, y=avg, fill=backend)) +
 pp_plot
 dev.off()
 
-ggsave("figs/timings.pdf", plot=pp_plot, width=6, height=4)
+ggsave("figs/timings.pdf", plot=pp_plot, width=6, height=3)
 

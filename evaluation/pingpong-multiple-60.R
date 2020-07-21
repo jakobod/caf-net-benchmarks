@@ -26,15 +26,15 @@ ppdf$lower <- ppdf$avg - ppdf$sdev
 
 pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
   geom_line() + # size=0.8) +
-  geom_point(aes(shape=proto), size = 1, stroke=0.8) +
+  geom_point(aes(shape=proto), size = 1, stroke=1) +
   geom_errorbar(
     mapping=aes(
       ymin=lower,
       ymax=upper
     ),
-    width=0.4
+    width=0.6
   ) +
-  scale_x_continuous(breaks=seq(1, 64, 3)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_x_continuous(breaks=seq(2, 62, 4)) + # expand=c(0, 0), limits=c(0, 10)
   scale_y_continuous(labels = human_numbers, limits=c(0,125000), breaks=seq(0, 125000, 25000)) + # expand=c(0, 0), limits=c(0, 10)
   theme_bw() +
   theme(
@@ -47,16 +47,15 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
     legend.box.margin=margin(c(3, 3, 3, 3)),
     legend.key.height=unit(0.4,"line"),
     legend.key.size=unit(0.6, 'lines'),
-    text=element_text(size=9),
+    text=element_text(size=20),
     strip.text.x=element_blank()
   ) +
   scale_fill_brewer(palette="Dark2") +
-  ggtitle("Pingpong multiple remote nodes 1 Ping") +
   labs(x="remote nodes [#]", y="throughput [pongs/s]")
 
 # tikz(file="figs/pingpong-1-ping.tikz", sanitize=TRUE, width=3.4, height=2.3)
 pp_plot
 dev.off()
 
-ggsave("figs/pingpong-1-ping-100.pdf", plot=pp_plot, width=6, height=3.75)
+ggsave("figs/pingpong-1-ping-100.pdf", plot=pp_plot, width=8, height=5)
 
