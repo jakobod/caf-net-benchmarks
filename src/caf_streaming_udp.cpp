@@ -30,6 +30,9 @@
 #include "caf/net/backend/udp.hpp"
 #include "caf/net/basp/ec.hpp"
 #include "caf/net/endpoint_manager.hpp"
+#include "caf/net/backend/udp.hpp"
+#include "caf/net/datagram_socket.hpp"
+#include "caf/net/defaults.hpp"
 #include "caf/net/middleman.hpp"
 #include "caf/net/udp_datagram_socket.hpp"
 #include "caf/uri.hpp"
@@ -37,8 +40,10 @@
 #include "utility.hpp"
 
 using namespace std;
-using namespace caf;
 using namespace std::chrono;
+using namespace caf;
+using namespace caf::net;
+
 namespace {
 
 struct accumulator_state {
@@ -155,22 +160,20 @@ struct config : actor_system_config {
     opt_group{custom_options_, "global"}
       .add(iterations, "iterations,i",
            "number of iterations that should be run")
-      .add(num_remote_nodes, "num_nodes,n", "number of remote nodes")
-      .add(num_pings, "pings,p", "number of pings to send");
-    put(content, "middleman.this-node", source_id);
+      .add(num_remote_nodes, "num_nodes,n", "number of remote nodes");
     put(content, "scheduler.max-threads", 1);
     load<net::middleman, net::backend::udp>();
     set("logger.file-name", "source.log");
   }
 
-  size_t iterations = 1;
-  size_t num_remote_nodes = 1;
-  size_t num_pings = 1;
-  uri source_id;
+  int num_remote_nodes = 1;
+  size_t iterations = 10;
+  std::string mode = "netBench";
+  uri earth_id;
 };
 
-void net_run_source_node(uri this_node, const std::string& remote_str,
-                         net::udp_datagram_socket sock, uint16_t port) {
+void net_run_source_node(net::udp_datagram_socket sock, uri sink_locator,
+                         uri this_node, uint16_t port) {
   actor_system_config cfg;
   cfg.load<net::middleman, net::backend::udp>();
   net::middleman::init_global_meta_objects();
@@ -180,7 +183,6 @@ void net_run_source_node(uri this_node, const std::string& remote_str,
   cfg.set("logger.file-name", "source.log");
   put(cfg.content, "middleman.this-node", this_node);
   put(cfg.content, "scheduler.max-threads", 1);
-  cerr << "pong_node " << to_string(this_node) << endl;
   if (auto err = cfg.parse(0, nullptr))
     exit(err);
   actor_system sys{cfg};
@@ -190,18 +192,14 @@ void net_run_source_node(uri this_node, const std::string& remote_str,
   auto ret = backend.emplace(sock, port);
   if (!ret)
     exit(ret.error());
-  auto remote_locator = make_uri(remote_str + "/name/ping");
-  if (!remote_locator)
-    exit(remote_locator.error());
-  auto source = mm.remote_actor(*remote_locator);
-  if (!source)
-    exit(to_string(source.error()));
-  auto sink = sys.spawn(pong_actor, *source);
-  anon_send(sink, start_atom_v);
+  auto sink = mm.remote_actor(sink_locator);
+  if (!sink)
+    exit(sink.error());
+  auto source = sys.spawn(source_actor);
+  anon_send(source, start_atom_v, *sink);
 }
 
 void caf_main(actor_system&, const config& args) {
-  cout << args.num_remote_nodes << ", ";
   ip_endpoint ep;
   if (auto err = parse("0.0.0.0:0", ep))
     exit("could not parse endpoint", err);
@@ -223,26 +221,26 @@ void caf_main(actor_system&, const config& args) {
   if (auto err = cfg.parse(0, nullptr))
     exit("could not parse config", err);
   actor_system sys{cfg};
-  auto ping = sys.spawn(sink_actor, args.num_remote_nodes, args.iterations,
-                        args.num_pings);
+  auto accumulator = sys.spawn(accumulator_actor, args.num_remote_nodes);
   auto& mm = sys.network_manager();
   auto& backend = *dynamic_cast<net::backend::udp*>(mm.backend("udp"));
   // Overwrite the default initialized socket and port.
   backend.emplace(sock, port);
-  mm.publish(ping, "ping");
   vector<thread> threads;
   for (size_t i = 0; i < args.num_remote_nodes; ++i) {
+    auto sink = sys.spawn(sink_actor, args.iterations, accumulator);
+    auto sink_str = "sink"s + to_string(i);
+    mm.publish(sink, sink_str);
+    auto sink_locator = *make_uri(this_node_str + "/name/" + sink_str);
+    // create remote socket and remote_node_id
     auto ret = net::make_udp_datagram_socket(ep);
     if (!ret)
       exit(ret.error());
-    auto [sock, port] = *ret;
-    auto pong_id = make_uri("udp://127.0.0.1:"s + to_string(port));
-    if (!pong_id)
-      exit("make_uri failed", pong_id.error());
-    cerr << "ping_id = " << to_string(*this_node)
-         << " pong_id = " << to_string(*pong_id) << endl;
-    auto f = [pong_id = *pong_id, this_node_str, sock = sock, port = port]() {
-      net_run_source_node(pong_id, this_node_str, sock, port);
+    auto sock = ret->first;
+    auto port = ret->second;
+    auto remote_node_id = *make_uri("udp://127.0.0.1:"s + to_string(port));
+    auto f = [sink_locator, sock, remote_node_id, port]() {
+      net_run_source_node(sock, sink_locator, remote_node_id, port);
     };
     threads.emplace_back(f);
   }
