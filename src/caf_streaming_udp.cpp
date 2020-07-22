@@ -58,6 +58,7 @@ behavior accumulator_actor(stateful_actor<accumulator_state>* self,
     [=](size_t amount, const actor& whom) {
       auto& s = self->state;
       s.counts[whom].push_back(amount);
+      std::cout << whom.id() << " sent " << amount << std::endl;
       if (s.max < s.counts.at(whom).size())
         s.max = s.counts.at(whom).size();
     },
@@ -162,6 +163,7 @@ struct config : actor_system_config {
            "number of iterations that should be run")
       .add(num_remote_nodes, "num_nodes,n", "number of remote nodes");
     put(content, "scheduler.max-threads", 1);
+    put(content, "middleman.workers", 1);
     load<net::middleman, net::backend::udp>();
     set("logger.file-name", "source.log");
   }
@@ -183,6 +185,7 @@ void net_run_source_node(net::udp_datagram_socket sock, uri sink_locator,
   cfg.set("logger.file-name", "source.log");
   put(cfg.content, "middleman.this-node", this_node);
   put(cfg.content, "scheduler.max-threads", 1);
+  put(cfg.content, "stream.size-policy.bytes-per-batch", 20);
   if (auto err = cfg.parse(0, nullptr))
     exit(err);
   actor_system sys{cfg};
@@ -195,8 +198,9 @@ void net_run_source_node(net::udp_datagram_socket sock, uri sink_locator,
   auto sink = mm.remote_actor(sink_locator);
   if (!sink)
     exit(sink.error());
+  scoped_actor self{sys};
   auto source = sys.spawn(source_actor);
-  anon_send(source, start_atom_v, *sink);
+  self->send(source, start_atom_v, *sink);
 }
 
 void caf_main(actor_system&, const config& args) {
@@ -217,6 +221,8 @@ void caf_main(actor_system&, const config& args) {
   if (auto err = cfg.parse(0, nullptr))
     exit("could not parse config", err);
   cfg.set("logger.file-name", "ping.log");
+  put(cfg.content, "stream.size-policy.bytes-per-batch", 20);
+  put(cfg.content, "scheduler.max-threads", 1);
   put(cfg.content, "middleman.this-node", *this_node);
   if (auto err = cfg.parse(0, nullptr))
     exit("could not parse config", err);

@@ -23,6 +23,7 @@ pingpong_net_vector$sdev <- apply(pingpong_net_vector[,2:100], 1, sd)
 pingpong_net_vector <- pingpong_net_vector[,1:11]
 pingpong_net_vector$proto <- 'libcaf_net - vector'
 
+<<<<<<< HEAD
 pingpong_net_udp <- read.csv("evaluation/data/pingpong-net-udp-1-pings.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 pingpong_net_udp$avg <- rowMeans(pingpong_net_udp[,2:11])
 pingpong_net_udp$sdev <- apply(pingpong_net_udp[,2:11], 1, sd)
@@ -31,6 +32,14 @@ pingpong_net_udp$proto <- 'libcaf_net - udp'
 
 
 ppdf <- rbind(pingpong_io, pingpong_net_vector, pingpong_net_udp)
+=======
+pingpong_net_udp <- read.csv("evaluation/data/pingpong-net-udp-1-ping.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+pingpong_net_udp$avg <- rowMeans(pingpong_net_udp[,2:100])
+pingpong_net_udp$sdev <- apply(pingpong_net_udp[,2:100], 1, sd)
+pingpong_net_udp$proto <- 'libcaf_net - vector'
+
+ppdf <- rbind(pingpong_io, pingpong_net_vector)
+>>>>>>> Working streaming benchmark for udp
 ppdf$upper <- ppdf$avg + ppdf$sdev
 ppdf$lower <- ppdf$avg - ppdf$sdev
 
@@ -44,8 +53,13 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
     ),
     width=0.6
   ) +
+<<<<<<< HEAD
   scale_x_continuous(breaks=seq(2, 62, 4)) + # expand=c(0, 0), limits=c(0, 10)
   scale_y_continuous(labels = human_numbers, limits=c(0,125000), breaks=seq(0, 125000, 25000)) + # expand=c(0, 0), limits=c(0, 10)
+=======
+  scale_x_continuous(limits=c(1,32), breaks=seq(1, 32, 1)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_y_continuous(labels = human_numbers, limits=c(0,125000), breaks=seq(0, 125000, 10000)) + # expand=c(0, 0), limits=c(0, 10)
+>>>>>>> Working streaming benchmark for udp
   theme_bw() +
   theme(
     legend.title=element_blank(),
