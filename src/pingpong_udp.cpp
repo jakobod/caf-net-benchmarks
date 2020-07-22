@@ -65,12 +65,11 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
   return {
     [=](hello_atom, const actor& sink) {
       self->state.sinks.push_back(sink);
-      std::cerr << "sent Hello atom from " << sink.id()
-                << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
       if (self->state.sinks.size() >= num_remote_nodes)
         self->send(self, start_atom_v);
     },
     [=](start_atom) {
+      std::cout << "start" << std::endl;
       self->state.for_each([=](const auto& sink) {
         for (size_t i = 0; i < num_pings; ++i)
           self->send(sink, ping_atom_v);
@@ -206,4 +205,4 @@ void caf_main(actor_system&, const config& args) {
 
 } // namespace
 
-CAF_MAIN()
+CAF_MAIN(net::middleman)
