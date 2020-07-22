@@ -9,19 +9,19 @@ source("evaluation/human_readable.R")
 pingpong_io <- read.csv("evaluation/data/pingpong-io-1-pings.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 pingpong_io$avg <- rowMeans(pingpong_io[,2:11])
 pingpong_io$sdev <- apply(pingpong_io[,2:11], 1, sd)
-pingpong_io$proto <- 'libcaf_io'
-
-pingpong_net <- read.csv("evaluation/data/pingpong-net-1-pings.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
-pingpong_net$avg <- rowMeans(pingpong_net[,2:11])
-pingpong_net$sdev <- apply(pingpong_net[,2:11], 1, sd)
-pingpong_net$proto <- 'libcaf_net'
+pingpong_io$proto <- 'libcaf_io - tcp'
 
 pingpong_net_vector <- read.csv("evaluation/data/pingpong-net-1-pings-vec.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 pingpong_net_vector$avg <- rowMeans(pingpong_net_vector[,2:11])
 pingpong_net_vector$sdev <- apply(pingpong_net_vector[,2:11], 1, sd)
-pingpong_net_vector$proto <- 'libcaf_net - vector'
+pingpong_net_vector$proto <- 'libcaf_net - tcp'
 
-ppdf <- rbind(pingpong_io, pingpong_net, pingpong_net_vector)
+pingpong_net_udp <- read.csv("evaluation/data/pingpong-net-udp-1-pings.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
+pingpong_net_udp$avg <- rowMeans(pingpong_net_udp[,2:11])
+pingpong_net_udp$sdev <- apply(pingpong_net_udp[,2:11], 1, sd)
+pingpong_net_udp$proto <- 'libcaf_net - udp'
+
+ppdf <- rbind(pingpong_io, pingpong_net_vector, pingpong_net_udp)
 ppdf$upper <- ppdf$avg + ppdf$sdev
 ppdf$lower <- ppdf$avg - ppdf$sdev
 
@@ -36,7 +36,7 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
     ),
     width=0.4
   ) +
-  scale_x_continuous(breaks=seq(1, 64, 2)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_x_continuous(limits=c(2,64), breaks=seq(2, 64, 2)) + # expand=c(0, 0), limits=c(0, 10)
   scale_y_continuous(labels = human_numbers, limits=c(0,120000), breaks=seq(0, 120000, 10000)) + # expand=c(0, 0), limits=c(0, 10)
   theme_bw() +
   theme(
