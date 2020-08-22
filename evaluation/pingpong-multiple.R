@@ -36,8 +36,8 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
     ),
     width=0.4
   ) +
-  scale_x_continuous(limits=c(1,64), breaks=seq(2, 64, 2)) + # expand=c(0, 0), limits=c(0, 10)
-  scale_y_continuous(labels = human_numbers, limits=c(0,120000), breaks=seq(0, 120000, 10000)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_x_continuous(breaks=seq(2, 62, 4)) + # expand=c(0, 0), limits=c(0, 10)
+  scale_y_continuous(labels = human_numbers, limits=c(0,125000), breaks=seq(0, 125000, 20000)) + # expand=c(0, 0), limits=c(0, 10)
   theme_bw() +
   theme(
     legend.title=element_blank(),
@@ -49,7 +49,7 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
     legend.box.margin=margin(c(3, 3, 3, 3)),
     legend.key.height=unit(0.4,"line"),
     legend.key.size=unit(0.6, 'lines'),
-    text=element_text(size=9),
+    text=element_text(size=20),
     strip.text.x=element_blank()
   ) +
   scale_fill_brewer(palette="Dark2") +
@@ -60,5 +60,5 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
 pp_plot
 dev.off()
 
-ggsave("figs/pingpong-1-ping.pdf", plot=pp_plot, width=8, height=5)
+ggsave("figs/pingpong-1-pings-udp.pdf", plot=pp_plot, width=8, height=5)
 

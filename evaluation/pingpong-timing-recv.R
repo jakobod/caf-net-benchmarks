@@ -27,12 +27,13 @@ pp_plot <- ggplot(ppdf, aes(x=num, y=avg, fill=backend)) +
   geom_errorbar(aes(ymin=lower, ymax=upper), width=.2,
                 position=position_dodge(.9))+
 #  ggtitle("Message processing durations for messages") +
-  labs(x="path", y="duration [µs]")
+  labs(x="path", y="duration [µs]") +
+  theme(text = element_text(size=20))
 
 
 # tikz(file="figs/pingpong-timings.tikz", sanitize=TRUE, width=3.4, height=2.3)
 pp_plot
 dev.off()
 
-ggsave("figs/timings.pdf", plot=pp_plot, width=6, height=3)
+ggsave("figs/timings.pdf", plot=pp_plot, width=8, height=5)
 
