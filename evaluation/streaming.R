@@ -47,10 +47,10 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
   ) +
   scale_color_brewer(type="qual", palette=6) +
   scale_fill_brewer(palette="Dark2") +
-  ggtitle("Streaming") +
+#  ggtitle("Streaming") +
   labs(x="remote nodes [#]", y="throughput [messages/s]")
 
-# tikz(file="figs/streaming.tikz", sanitize=TRUE, width=3.4, height=2.3)
+tikz(file="figs/streaming.tikz", sanitize=TRUE, width=3.4, height=2.3)
 pp_plot
 dev.off()
 

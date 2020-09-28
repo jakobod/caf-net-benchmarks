@@ -49,16 +49,17 @@ pp_plot <- ggplot(ppdf, aes(x=num_pings, y=avg, color=proto)) +
     legend.box.margin=margin(c(3, 3, 3, 3)),
     legend.key.height=unit(0.4,"line"),
     legend.key.size=unit(0.6, 'lines'),
-    text=element_text(size=20),
+    text=element_text(size=9),
     strip.text.x=element_blank()
   ) +
+  scale_color_brewer(type="qual", palette=6) +
   scale_fill_brewer(palette="Dark2") +
-  ggtitle("Pingpong multiple remote nodes 1 Ping") +
+  #ggtitle("Streaming") +
   labs(x="remote nodes [#]", y="throughput [pongs/s]")
 
-# tikz(file="figs/pingpong-1-ping.tikz", sanitize=TRUE, width=3.4, height=2.3)
+tikz(file="figs/pingpong.tikz", sanitize=TRUE, width=3.4, height=2.3)
 pp_plot
 dev.off()
 
-ggsave("figs/pingpong-1-pings-udp.pdf", plot=pp_plot, width=8, height=5)
+ggsave("figs/pingpong.pdf", plot=pp_plot, width=3.4, height=2.3)
 
