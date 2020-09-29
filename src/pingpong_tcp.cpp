@@ -81,10 +81,7 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
       self->state.tick();
       if (++self->state.iterations >= iterations) {
         std::cout << std::endl;
-        self->state.for_each(
-          [=](const auto& sink) { self->send(sink, done_atom_v); });
         self->quit();
-        std::cerr << "ENDING BENCHMARK NOW" << std::endl;
       }
     },
     [=](payload& p) {
@@ -95,8 +92,12 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
 }
 
 behavior pong_actor(event_based_actor* self, const actor& source) {
+  self->set_exit_handler([=](const exit_msg&) { self->quit(); });
   return {
-    [=](start_atom) { self->send(source, hello_atom_v, self); },
+    [=](start_atom) {
+      self->link_to(source);
+      self->send(source, hello_atom_v, self);
+    },
     [=](payload& p) { return p; },
     [=](done_atom) { self->quit(); },
   };

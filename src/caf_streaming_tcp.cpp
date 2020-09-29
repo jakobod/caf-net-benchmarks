@@ -55,7 +55,6 @@ behavior accumulator_actor(stateful_actor<accumulator_state>* self,
         s.max = s.counts.at(whom).size();
     },
     [=](done_atom) {
-      std::cerr << "got done" << std::endl;
       if (++self->state.num_dones >= num_nodes) {
         auto& s = self->state;
         std::vector<size_t> acc(s.max);
@@ -84,15 +83,10 @@ struct source_state : tick_state {
 };
 
 behavior source_actor(stateful_actor<source_state>* self) {
-  self->set_down_handler([=](const down_msg& msg) {
-    std::cerr << "sink quit!" << std::endl;
-    self->quit();
-  });
+  self->set_exit_handler([=](const exit_msg&) { self->quit(); });
   return {
     [=](start_atom, const actor& sink) {
-      std::cerr << "START from: " << to_string(self->current_sender()).c_str()
-                << std::endl;
-      self->monitor(sink);
+      self->link_to(sink);
       return attach_stream_source(
         self, sink,
         // initialize state
@@ -112,15 +106,15 @@ behavior source_actor(stateful_actor<source_state>* self) {
 
 behavior sink_actor(stateful_actor<tick_state>* self, size_t iterations,
                     actor accumulator) {
+  self->set_exit_handler([=](const exit_msg&) { self->quit(); });
+  self->link_to(accumulator);
   return {
     [=](tick_atom) {
       self->delayed_send(self, 1s, tick_atom_v);
       self->send(accumulator, self->state.count, self);
       self->state.count = 0;
-      if (++self->state.tick_count >= iterations) {
+      if (++self->state.tick_count >= iterations)
         self->send(accumulator, done_atom_v);
-        self->quit();
-      }
     },
     [=](const stream<byte>& in) {
       self->delayed_send(self, 1s, tick_atom_v);

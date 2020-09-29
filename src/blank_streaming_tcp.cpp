@@ -94,7 +94,7 @@ behavior source_actor(stateful_actor<source_state>* self, actor sink,
       self->send(sink, init);
       self->state.p.resize(payload_size);
       self->delayed_send(self, 1s, tick_atom_v);
-      for (size_t credit = 0; credit < 1000; ++credit)
+      for (size_t credit = 0; credit < 10000; ++credit)
         self->send(sink, self->state.p);
     },
     [=](credit_atom) { self->send(sink, self->state.p); },
