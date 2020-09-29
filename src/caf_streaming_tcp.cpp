@@ -34,13 +34,13 @@
 #include "type_ids.hpp"
 #include "utility.hpp"
 
-using namespace std;
 using namespace caf;
+using namespace std::chrono;
 
 namespace {
 
 struct accumulator_state {
-  map<actor, vector<size_t>> counts;
+  std::map<actor, std::vector<size_t>> counts;
   size_t max = 0;
   size_t num_dones = 0;
 };
@@ -55,10 +55,10 @@ behavior accumulator_actor(stateful_actor<accumulator_state>* self,
         s.max = s.counts.at(whom).size();
     },
     [=](done_atom) {
-      cerr << "got done" << endl;
+      std::cerr << "got done" << std::endl;
       if (++self->state.num_dones >= num_nodes) {
         auto& s = self->state;
-        vector<size_t> acc(s.max);
+        std::vector<size_t> acc(s.max);
 
         for (const auto& p : s.counts) {
           for (int i = 0; i < p.second.size(); ++i) {
@@ -66,8 +66,8 @@ behavior accumulator_actor(stateful_actor<accumulator_state>* self,
           }
         }
         for (auto& v : acc)
-          cout << v << ", ";
-        cout << endl;
+          std::cout << v << ", ";
+        std::cout << std::endl;
         self->quit();
       }
     },
@@ -85,13 +85,13 @@ struct source_state : tick_state {
 
 behavior source_actor(stateful_actor<source_state>* self) {
   self->set_down_handler([=](const down_msg& msg) {
-    cerr << "sink quit!" << endl;
+    std::cerr << "sink quit!" << std::endl;
     self->quit();
   });
   return {
     [=](start_atom, const actor& sink) {
-      cerr << "START from: " << to_string(self->current_sender()).c_str()
-           << endl;
+      std::cerr << "START from: " << to_string(self->current_sender()).c_str()
+                << std::endl;
       self->monitor(sink);
       return attach_stream_source(
         self, sink,
@@ -100,9 +100,9 @@ behavior source_actor(stateful_actor<source_state>* self) {
           // nop
         },
         // get next element
-        [=](unit_t&, downstream<uint64_t>& out, size_t num) {
+        [=](unit_t&, downstream<caf::byte>& out, size_t num) {
           for (size_t i = 0; i < num; ++i)
-            out.push(self->state.current++);
+            out.push(byte{42});
         },
         // check whether we reached the end
         [=](const unit_t&) { return false; });
@@ -114,7 +114,7 @@ behavior sink_actor(stateful_actor<tick_state>* self, size_t iterations,
                     actor accumulator) {
   return {
     [=](tick_atom) {
-      self->delayed_send(self, chrono::seconds(1), tick_atom_v);
+      self->delayed_send(self, 1s, tick_atom_v);
       self->send(accumulator, self->state.count, self);
       self->state.count = 0;
       if (++self->state.tick_count >= iterations) {
@@ -122,8 +122,8 @@ behavior sink_actor(stateful_actor<tick_state>* self, size_t iterations,
         self->quit();
       }
     },
-    [=](const stream<uint64_t>& in) {
-      self->delayed_send(self, chrono::seconds(1), tick_atom_v);
+    [=](const stream<byte>& in) {
+      self->delayed_send(self, 1s, tick_atom_v);
       return attach_stream_sink(
         self,
         // input stream
@@ -133,7 +133,7 @@ behavior sink_actor(stateful_actor<tick_state>* self, size_t iterations,
           // nop
         },
         // processing step
-        [=](unit_t&, uint64_t x) { ++self->state.count; },
+        [=](unit_t&, byte) { ++self->state.count; },
         // cleanup
         [](unit_t&) {
           // nop
@@ -153,13 +153,12 @@ struct config : actor_system_config {
            "number of iterations that should be run");
 
     earth_id = *make_uri("tcp://earth");
-    put(content, "middleman.this-node", earth_id);
-    put(content, "scheduler.max-threads", 1);
+    put(content, "caf.middleman.this-node", earth_id);
+    put(content, "caf.scheduler.max-threads", 1);
     load<net::middleman, net::backend::tcp>();
-    set("logger.file-name", "source.log");
   }
 
-  int num_remote_nodes = 1;
+  size_t num_remote_nodes = 1;
   size_t iterations = 10;
   std::string mode = "netBench";
   uri earth_id;
@@ -170,7 +169,6 @@ void io_run_source(net::stream_socket sock, uint16_t port) {
   cfg.load<io::middleman>();
   if (auto err = cfg.parse(0, nullptr))
     exit(err);
-  cfg.set("logger.file-name", "sink.log");
   actor_system sys{cfg};
   using io::network::scribe_impl;
   auto& mm = sys.middleman();
@@ -178,9 +176,9 @@ void io_run_source(net::stream_socket sock, uint16_t port) {
   io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, sock.id);
   auto bb = mm.named_broker<io::basp_broker>("BASP");
   scoped_actor self{sys};
-  self->request(bb, infinite, connect_atom_v, move(scribe), port)
+  self->request(bb, infinite, connect_atom_v, std::move(scribe), port)
     .receive(
-      [&](node_id&, strong_actor_ptr& ptr, set<string>&) {
+      [&](node_id&, strong_actor_ptr& ptr, std::set<std::string>&) {
         if (ptr == nullptr)
           exit("could not get a handle to remote source");
         auto source = sys.spawn(source_actor);
@@ -190,16 +188,16 @@ void io_run_source(net::stream_socket sock, uint16_t port) {
 }
 
 void net_run_source(net::stream_socket sock, size_t id) {
-  cerr << "id = " << id << endl;
-  auto source_id = *make_uri("tcp://source"s + to_string(id));
-  auto sink_locator = *make_uri("tcp://earth/name/sink"s + to_string(id));
+  std::cerr << "id = " << id << std::endl;
+  auto source_id = *make_uri(std::string("tcp://source") + std::to_string(id));
+  auto sink_locator
+    = *make_uri(std::string("tcp://earth/name/sink") + std::to_string(id));
   actor_system_config cfg;
   cfg.load<net::middleman, net::backend::tcp>();
   if (auto err = cfg.parse(0, nullptr))
     exit(err);
-  cfg.set("logger.file-name", "sink.log");
-  put(cfg.content, "middleman.this-node", source_id);
-  put(cfg.content, "scheduler.max-threads", 1);
+  put(cfg.content, "caf.middleman.this-node", source_id);
+  put(cfg.content, "caf.scheduler.max-threads", 1);
   if (auto err = cfg.parse(0, nullptr))
     exit(err);
   actor_system sys{cfg};
@@ -209,7 +207,7 @@ void net_run_source(net::stream_socket sock, size_t id) {
                              sock);
   if (!ret)
     exit(ret.error());
-  cerr << "resolve locator " << to_string(sink_locator) << endl;
+  std::cerr << "resolve locator " << to_string(sink_locator) << std::endl;
   auto sink = mm.remote_actor(sink_locator);
   if (!sink)
     exit(sink.error());
@@ -219,12 +217,12 @@ void net_run_source(net::stream_socket sock, size_t id) {
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
-  cout << cfg.num_remote_nodes << ", ";
-  vector<thread> threads;
+  std::cout << cfg.num_remote_nodes << ", ";
+  std::vector<std::thread> threads;
   auto accumulator = sys.spawn(accumulator_actor, cfg.num_remote_nodes);
   switch (convert(cfg.mode)) {
     case bench_mode::io: {
-      cerr << "run in 'ioBench' mode" << endl;
+      std::cerr << "run in 'ioBench' mode" << std::endl;
       using io::network::scribe_impl;
       auto& mm = sys.middleman();
       auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
@@ -233,23 +231,24 @@ void caf_main(actor_system& sys, const config& cfg) {
         auto p = *net::make_stream_socket_pair();
         io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, p.first.id);
         auto sink = sys.spawn(sink_actor, cfg.iterations, accumulator);
-        anon_send(bb, publish_atom_v, move(scribe), uint16_t(8080 + port),
-                  actor_cast<strong_actor_ptr>(sink), set<string>{});
+        anon_send(bb, publish_atom_v, std::move(scribe), uint16_t(8080 + port),
+                  actor_cast<strong_actor_ptr>(sink), std::set<std::string>{});
         auto f = [=]() { io_run_source(p.second, port); };
         threads.emplace_back(f);
       }
       break;
     }
     case bench_mode::net: {
-      cerr << "run in 'netBench' mode " << endl;
+      std::cerr << "run in 'netBench' mode " << std::endl;
       auto& mm = sys.network_manager();
       auto& backend = *dynamic_cast<net::backend::tcp*>(mm.backend("tcp"));
       for (size_t node = 0; node < cfg.num_remote_nodes; ++node) {
-        cerr << "node = " << node << endl;
-        auto source_id = *make_uri("tcp://source"s + to_string(node));
-        cerr << "source_id: " << to_string(source_id) << endl;
+        std::cerr << "node = " << node << std::endl;
+        auto source_id
+          = *make_uri(std::string("tcp://source") + std::to_string(node));
+        std::cerr << "source_id: " << to_string(source_id) << std::endl;
         auto sink = sys.spawn(sink_actor, cfg.iterations, accumulator);
-        sys.registry().put("sink"s + to_string(node), sink);
+        sys.registry().put(std::string("sink") + std::to_string(node), sink);
         auto sockets = *make_connected_tcp_socket_pair();
         backend.emplace(make_node_id(source_id), sockets.first);
         auto f = [=]() { net_run_source(sockets.second, node); };
@@ -258,7 +257,7 @@ void caf_main(actor_system& sys, const config& cfg) {
       break;
     }
     default:
-      exit("invalid mode: \""s + cfg.mode + "\"");
+      exit(std::string("invalid mode: \"") + cfg.mode + "\"");
   }
   for (auto& thread : threads)
     thread.join();

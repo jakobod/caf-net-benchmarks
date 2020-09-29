@@ -27,10 +27,8 @@
 
 CAF_BEGIN_TYPE_ID_BLOCK(caf_net_benchmark, caf::first_custom_type_id)
 
-  CAF_ADD_TYPE_ID(caf_net_benchmark, (std::vector<uint64_t>) )
-  CAF_ADD_TYPE_ID(caf_net_benchmark, (caf::stream<uint64_t>) )
-  CAF_ADD_TYPE_ID(caf_net_benchmark, (caf::stream<std::vector<uint64_t>>) )
-  CAF_ADD_TYPE_ID(caf_net_benchmark, (std::vector<std::vector<uint64_t>>) )
+  CAF_ADD_TYPE_ID(caf_net_benchmark, (caf::byte))
+  CAF_ADD_TYPE_ID(caf_net_benchmark, (caf::stream<caf::byte>) )
   CAF_ADD_TYPE_ID(caf_net_benchmark, (std::vector<std::chrono::microseconds>) )
   CAF_ADD_TYPE_ID(caf_net_benchmark, (std::chrono::microseconds))
 
