@@ -23,6 +23,7 @@
 
 #include "caf/actor_system_config.hpp"
 #include "caf/all.hpp"
+#include "caf/byte.hpp"
 #include "caf/defaults.hpp"
 #include "caf/io/all.hpp"
 #include "caf/io/network/default_multiplexer.hpp"
@@ -36,22 +37,22 @@
 #include "type_ids.hpp"
 #include "utility.hpp"
 
-using namespace std;
 using namespace caf;
 using namespace std::chrono;
 
 namespace {
 
+using payload = std::vector<caf::byte>;
+
 struct tick_state {
   void tick() {
-    cout << count << ", ";
+    std::cout << count << ", ";
     count = 0;
   }
 
-  vector<actor> sinks;
+  std::vector<actor> sinks;
   size_t count = 0;
   size_t iterations = 0;
-  size_t arrived = 0;
 
   template <class Func>
   void for_each(Func f) {
@@ -61,34 +62,34 @@ struct tick_state {
 };
 
 behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
-                    size_t iterations, size_t num_pings) {
+                    size_t iterations, size_t num_pings, size_t payload_size) {
   return {
     [=](hello_atom, const actor& sink) {
       self->state.sinks.push_back(sink);
       if (self->state.sinks.size() >= num_remote_nodes) {
-        self->send(self, start_atom_v);
+        std::cerr << "STARTING BENCHMARK NOW" << std::endl;
+        payload p(payload_size);
+        self->state.for_each([&](const auto& sink) {
+          for (size_t i = 0; i < num_pings; ++i)
+            self->send(sink, p);
+        });
+        self->delayed_send(self, seconds(1), tick_atom_v);
       }
-    },
-    [=](start_atom) {
-      self->state.for_each([=](const auto& sink) {
-        for (size_t i = 0; i < num_pings; ++i)
-          self->send(sink, ping_atom_v);
-      });
-      self->delayed_send(self, seconds(1), tick_atom_v);
     },
     [=](tick_atom) {
       self->delayed_send(self, seconds(1), tick_atom_v);
       self->state.tick();
       if (++self->state.iterations >= iterations) {
-        cout << endl;
+        std::cout << std::endl;
         self->state.for_each(
           [=](const auto& sink) { self->send(sink, done_atom_v); });
         self->quit();
+        std::cerr << "ENDING BENCHMARK NOW" << std::endl;
       }
     },
-    [=](pong_atom) {
+    [=](payload& p) {
       self->state.count++;
-      return ping_atom_v;
+      return p;
     },
   };
 }
@@ -96,7 +97,7 @@ behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
 behavior pong_actor(event_based_actor* self, const actor& source) {
   return {
     [=](start_atom) { self->send(source, hello_atom_v, self); },
-    [=](ping_atom) { return pong_atom_v; },
+    [=](payload& p) { return p; },
     [=](done_atom) { self->quit(); },
   };
 }
@@ -110,14 +111,15 @@ struct config : actor_system_config {
       .add(iterations, "iterations,i",
            "number of iterations that should be run")
       .add(num_remote_nodes, "num_nodes,n", "number of remote nodes")
-      .add(num_pings, "pings,p", "number of pings to send");
+      .add(num_pings, "pings,p", "number of pings to send")
+      .add(payload_size, "size,s", "size of the payload");
     source_id = *make_uri("tcp://source");
-    put(content, "middleman.this-node", source_id);
-    put(content, "scheduler.max-threads", 1);
+    put(content, "caf.middleman.this-node", source_id);
+    put(content, "caf.scheduler.max-threads", 1);
     load<net::middleman, net::backend::tcp>();
-    set("logger.file-name", "source.log");
   }
 
+  size_t payload_size = 1;
   size_t iterations = 10;
   size_t num_remote_nodes = 1;
   size_t num_pings = 1;
@@ -130,8 +132,7 @@ void io_run_node(uint16_t port, int sock) {
   cfg.load<io::middleman>();
   if (auto err = cfg.parse(0, nullptr))
     exit("could not parse config", err);
-  cfg.set("logger.file-name", "sink.log");
-  put(cfg.content, "scheduler.max-threads", 1);
+  put(cfg.content, "caf.scheduler.max-threads", 1);
   actor_system sys{cfg};
   using io::network::scribe_impl;
   auto& mm = sys.middleman();
@@ -139,9 +140,9 @@ void io_run_node(uint16_t port, int sock) {
   io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, sock);
   auto bb = mm.named_broker<io::basp_broker>("BASP");
   scoped_actor self{sys};
-  self->request(bb, infinite, connect_atom_v, move(scribe), port)
+  self->request(bb, infinite, connect_atom_v, std::move(scribe), port)
     .receive(
-      [&](node_id&, strong_actor_ptr& ptr, set<string>&) {
+      [&](node_id&, strong_actor_ptr& ptr, std::set<std::string>&) {
         if (ptr == nullptr)
           exit("could not get a handle to remote source");
         auto sink = sys.spawn(pong_actor, actor_cast<actor>(ptr));
@@ -155,9 +156,8 @@ void net_run_node(uri id, net::stream_socket sock) {
   cfg.load<net::middleman, net::backend::tcp>();
   if (auto err = cfg.parse(0, nullptr))
     exit("could not parse config", err);
-  cfg.set("logger.file-name", "sink.log");
-  put(cfg.content, "middleman.this-node", id);
-  put(cfg.content, "scheduler.max-threads", 1);
+  put(cfg.content, "caf.middleman.this-node", id);
+  put(cfg.content, "caf.scheduler.max-threads", 1);
   if (auto err = cfg.parse(0, nullptr))
     exit("could not parse config", err);
   actor_system sys{cfg};
@@ -177,13 +177,13 @@ void net_run_node(uri id, net::stream_socket sock) {
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
-  vector<thread> threads;
+  std::vector<std::thread> threads;
   auto src = sys.spawn(ping_actor, cfg.num_remote_nodes, cfg.iterations,
-                       cfg.num_pings);
-  cout << cfg.num_remote_nodes << ", ";
+                       cfg.num_pings, cfg.payload_size);
+  std::cout << cfg.num_remote_nodes << ", ";
   switch (convert(cfg.mode)) {
     case bench_mode::io: {
-      std::cerr << "run in 'ioBench' mode" << endl;
+      std::cerr << "run in 'ioBench' mode" << std::endl;
       using io::network::scribe_impl;
       auto& mm = sys.middleman();
       auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
@@ -191,21 +191,21 @@ void caf_main(actor_system& sys, const config& cfg) {
       for (size_t port = 0; port < cfg.num_remote_nodes; ++port) {
         auto p = *net::make_stream_socket_pair();
         io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, p.first.id);
-        anon_send(bb, publish_atom_v, move(scribe), uint16_t(8080 + port),
-                  actor_cast<strong_actor_ptr>(src), set<string>{});
+        anon_send(bb, publish_atom_v, std::move(scribe), uint16_t(8080 + port),
+                  actor_cast<strong_actor_ptr>(src), std::set<std::string>{});
         auto f = [=]() { io_run_node(port, p.second.id); };
         threads.emplace_back(f);
       }
       break;
     }
     case bench_mode::net: {
-      cerr << "run in 'netBench' mode " << endl;
+      std::cerr << "run in 'netBench' mode " << std::endl;
       auto& mm = sys.network_manager();
       auto& backend = *dynamic_cast<net::backend::tcp*>(mm.backend("tcp"));
       mm.publish(src, "source");
       for (size_t i = 0; i < cfg.num_remote_nodes; ++i) {
         auto p = *make_connected_tcp_socket_pair();
-        auto sink_id = *make_uri("tcp://sink"s + to_string(i));
+        auto sink_id = *make_uri(std::string("tcp://sink") + std::to_string(i));
         backend.emplace(make_node_id(sink_id), p.first);
         auto f = [=]() { net_run_node(sink_id, p.second); };
         threads.emplace_back(f);
@@ -213,11 +213,11 @@ void caf_main(actor_system& sys, const config& cfg) {
       break;
     }
     default:
-      exit("invalid mode: \""s + cfg.mode + "\"");
+      exit(std::string("invalid mode: \"") + cfg.mode + "\"");
   }
   for (auto& t : threads)
     t.join();
-  std::cerr << endl;
+  std::cerr << std::endl;
 }
 
 } // namespace

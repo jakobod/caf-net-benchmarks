@@ -110,11 +110,7 @@ behavior source_actor(stateful_actor<source_state>* self) {
   };
 }
 
-struct sink_state : tick_state {
-  const char* name = "sink";
-};
-
-behavior sink_actor(stateful_actor<sink_state>* self, size_t iterations,
+behavior sink_actor(stateful_actor<tick_state>* self, size_t iterations,
                     actor accumulator) {
   return {
     [=](tick_atom) {
