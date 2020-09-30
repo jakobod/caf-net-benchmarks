@@ -181,7 +181,6 @@ void caf_main(actor_system& sys, const config& cfg) {
   std::vector<std::thread> threads;
   auto src = sys.spawn(ping_actor, cfg.num_remote_nodes, cfg.iterations,
                        cfg.num_pings, cfg.payload_size);
-  std::cout << cfg.num_remote_nodes << ", ";
   switch (convert(cfg.mode)) {
     case bench_mode::io: {
       std::cerr << "run in 'ioBench' mode" << std::endl;
