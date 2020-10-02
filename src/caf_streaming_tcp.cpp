@@ -76,6 +76,8 @@ behavior accumulator_actor(stateful_actor<accumulator_state>* self,
 struct tick_state {
   size_t count = 0;
   size_t tick_count = 0;
+  bool done = false;
+  actor source;
 };
 
 struct source_state : tick_state {
@@ -85,8 +87,10 @@ struct source_state : tick_state {
 behavior source_actor(stateful_actor<source_state>* self) {
   self->set_exit_handler([=](const exit_msg&) { self->quit(); });
   return {
+    [=](done_atom) { self->state.done = true; },
     [=](start_atom, const actor& sink) {
       self->link_to(sink);
+      self->send(sink, hello_atom_v, self);
       return attach_stream_source(
         self, sink,
         // initialize state
@@ -99,22 +103,23 @@ behavior source_actor(stateful_actor<source_state>* self) {
             out.push(byte{42});
         },
         // check whether we reached the end
-        [=](const unit_t&) { return false; });
+        [=](const unit_t&) { return self->state.done; });
     },
   };
 }
 
 behavior sink_actor(stateful_actor<tick_state>* self, size_t iterations,
                     actor accumulator) {
-  self->set_exit_handler([=](const exit_msg&) { self->quit(); });
-  self->link_to(accumulator);
   return {
+    [=](hello_atom, const actor& source) { self->state.source = source; },
     [=](tick_atom) {
       self->delayed_send(self, 1s, tick_atom_v);
       self->send(accumulator, self->state.count, self);
       self->state.count = 0;
-      if (++self->state.tick_count >= iterations)
+      if (++self->state.tick_count >= iterations) {
         self->send(accumulator, done_atom_v);
+        self->send(self->state.source, done_atom_v);
+      }
     },
     [=](const stream<byte>& in) {
       self->delayed_send(self, 1s, tick_atom_v);
@@ -129,9 +134,7 @@ behavior sink_actor(stateful_actor<tick_state>* self, size_t iterations,
         // processing step
         [=](unit_t&, byte) { ++self->state.count; },
         // cleanup
-        [](unit_t&) {
-          // nop
-        });
+        [=](unit_t&) { self->quit(); });
     },
   };
 }
@@ -182,7 +185,6 @@ void io_run_source(net::stream_socket sock, uint16_t port) {
 }
 
 void net_run_source(net::stream_socket sock, size_t id) {
-  std::cerr << "id = " << id << std::endl;
   auto source_id = *make_uri(std::string("tcp://source") + std::to_string(id));
   auto sink_locator
     = *make_uri(std::string("tcp://earth/name/sink") + std::to_string(id));
@@ -201,7 +203,6 @@ void net_run_source(net::stream_socket sock, size_t id) {
                              sock);
   if (!ret)
     exit(ret.error());
-  std::cerr << "resolve locator " << to_string(sink_locator) << std::endl;
   auto sink = mm.remote_actor(sink_locator);
   if (!sink)
     exit(sink.error());
@@ -211,7 +212,6 @@ void net_run_source(net::stream_socket sock, size_t id) {
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
-  std::cout << cfg.num_remote_nodes << ", ";
   std::vector<std::thread> threads;
   auto accumulator = sys.spawn(accumulator_actor, cfg.num_remote_nodes);
   switch (convert(cfg.mode)) {
@@ -237,10 +237,8 @@ void caf_main(actor_system& sys, const config& cfg) {
       auto& mm = sys.network_manager();
       auto& backend = *dynamic_cast<net::backend::tcp*>(mm.backend("tcp"));
       for (size_t node = 0; node < cfg.num_remote_nodes; ++node) {
-        std::cerr << "node = " << node << std::endl;
         auto source_id
           = *make_uri(std::string("tcp://source") + std::to_string(node));
-        std::cerr << "source_id: " << to_string(source_id) << std::endl;
         auto sink = sys.spawn(sink_actor, cfg.iterations, accumulator);
         sys.registry().put(std::string("sink") + std::to_string(node), sink);
         auto sockets = *make_connected_tcp_socket_pair();

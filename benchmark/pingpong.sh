@@ -1,47 +1,71 @@
 #!/bin/bash
 
 output_folder="evaluation/out"
-rm -rf ${output_folder}
 mkdir -p ${output_folder}
 
-duration=60
-
 function init_file() {
-  printf "num_pings" > ${1}.out
-  for i in {1..${duration}..1}; do
-    echo "value${i}, " >> ${1}.out
+  printf "${1}, " > ${2}.out
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    printf "value${i}, " >> ${2}.out
   done;
-  echo "" >> ${1}.out
+  echo "" >> ${2}.out
 }
 
-# -- netBenchmark -------------------------------------------------------------
+echo "-- netBenchmark ---------------------------------------------------------"
 
-for pings in 1 10 100; do
-  echo "------------------------ ${pings} pings ------------------------"
-  net_file="${output_folder}/pingpong-net-${pings}-pings"
-  init_file ${net_file}
-  for num_nodes in {1..64..1}; do
-    printf ${num_nodes} >> ${net_file}
-    while : ; do
-      echo "starting netBench-${num_nodes} nodes"
-      ./release/pingpong_tcp -mnetBench -n${num_nodes} -p${pings} -i${duration} >> ${net_file}.out 2> ${net_file}.err
-      [[ $? != 0 ]] || break # if program exited with error rerun it.
-    done;
+out_file="evaluation/out/pingpong-net-variable-size"
+init_file ping_size ${out_file}
+ping_size=1
+while [ $ping_size -lt 40000 ]; do
+  echo "------------------------ ${ping_size} Bytes ---------------------------"
+  printf "${ping_size}, " >> ${out_file}.out
+  while : ; do
+    ./release/pingpong_tcp -mnetBench -s$ping_size >> ${out_file}.out 2> ${out_file}.err
+    [[ $? != 0 ]] || break # if program exited with error rerun it.
   done;
+  ping_size=$((ping_size*2))
 done;
 
-echo ""
 
-for pings in 1 10 100; do
-  echo "------------------------ ${pings} pings ------------------------"
-  io_file="${output_folder}/pingpong-io-${pings}-pings"
-  init_file ${io_file}
-  for num_nodes in {1..64..1}; do
-    printf ${num_nodes} >> ${io_file}
-    while : ; do
-      echo "starting ioBench-${num_nodes} nodes"
-      ./release/pingpong_tcp -mioBench -n${num_nodes} -p${pings} -i${duration} >> ${io_file}.out 2> ${io_file}.err
-      [[ $? != 0 ]] || break # if program exited with error rerun it.
-    done;
+out_file="evaluation/out/pingpong-net-variable-remote-nodes"
+init_file remote_nodes ${out_file}
+remote_nodes=1
+while [ $remote_nodes -le 64 ]; do
+  echo "---------------------- ${remote_nodes} nodes --------------------------"
+  printf "${remote_nodes}, " >> ${out_file}.out
+  while : ; do
+    ./release/pingpong_tcp -mnetBench -n$remote_nodes >> ${out_file}.out 2> ${out_file}.err
+    [[ $? != 0 ]] || break # if program exited with error rerun it.
   done;
+  remote_nodes=$((remote_nodes+1))
+done;
+
+
+echo "-- ioBenchmark ----------------------------------------------------------"
+
+out_file="evaluation/out/pingpong-io-variable-size"
+init_file ping_size ${out_file}
+ping_size=1
+while [ $ping_size -lt 40000 ]; do
+  echo "------------------------ ${ping_size} Bytes ------------------------"
+  printf "${ping_size}, " >> ${out_file}.out
+  while : ; do
+    ./release/pingpong_tcp -mioBench -s$ping_size >> ${out_file}.out 2> ${out_file}.err
+    [[ $? != 0 ]] || break # if program exited with error rerun it.
+  done;
+  ping_size=$((ping_size*2))
+done;
+
+
+out_file="evaluation/out/pingpong-io-variable-remote-nodes"
+init_file remote_nodes ${out_file}
+remote_nodes=1
+while [ $remote_nodes -le 64 ]; do
+  echo "---------------------- ${remote_nodes} nodes -----------------------"
+  printf "${remote_nodes}, " >> ${out_file}.out
+  while : ; do
+    ./release/pingpong_tcp -mioBench -n$remote_nodes >> ${out_file}.out 2> ${out_file}.err
+    [[ $? != 0 ]] || break # if program exited with error rerun it.
+  done;
+  remote_nodes=$((remote_nodes+1))
 done;
