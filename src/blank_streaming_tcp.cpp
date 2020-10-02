@@ -76,6 +76,7 @@ behavior accumulator_actor(stateful_actor<accumulator_state>* self,
 }
 
 struct tick_state {
+  size_t max_iterations = 0;
   size_t count = 0;
   size_t tick_count = 0;
 };
@@ -91,38 +92,34 @@ behavior source_actor(stateful_actor<source_state>* self, actor sink,
   return {
     [=](init_atom init) {
       self->link_to(sink);
-      self->send(sink, init);
+      self->send(sink, init, iterations);
       self->state.p.resize(payload_size);
-      self->delayed_send(self, 1s, tick_atom_v);
-      for (size_t credit = 0; credit < 10000; ++credit)
-        self->send(sink, self->state.p);
+      self->send(self, send_atom_v);
     },
-    [=](credit_atom) { self->send(sink, self->state.p); },
-    [=](tick_atom) {
-      self->delayed_send(self, 1s, tick_atom_v);
-      if (++self->state.count >= iterations)
-        self->send(sink, done_atom_v);
+    [=](send_atom send) {
+      self->send(sink, self->state.p);
+      self->send(self, send);
     },
-
   };
 }
 
 behavior sink_actor(stateful_actor<tick_state>* self, actor accumulator) {
   self->set_exit_handler([=](const exit_msg&) { self->quit(); });
   return {
-    [=](init_atom) {
+    [=](init_atom, size_t iterations) {
+      self->state.max_iterations = iterations;
       self->link_to(accumulator);
       self->delayed_send(self, 1s, tick_atom_v);
     },
     [=](tick_atom) {
+      aout(self) << "tick\n";
       self->delayed_send(self, 1s, tick_atom_v);
       self->send(accumulator, self->state.count, self);
       self->state.count = 0;
+      if (++self->state.tick_count >= self->state.max_iterations)
+        self->send(self, done_atom_v);
     },
-    [=](const payload&) {
-      ++self->state.count;
-      return credit_atom_v;
-    },
+    [=](const payload&) { ++self->state.count; },
     [=](done_atom done) { self->send(accumulator, done); },
   };
 }
