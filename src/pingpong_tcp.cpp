@@ -31,7 +31,6 @@
 #include "caf/io/scribe.hpp"
 #include "caf/net/backend/tcp.hpp"
 #include "caf/net/basp/ec.hpp"
-#include "caf/net/endpoint_manager.hpp"
 #include "caf/net/middleman.hpp"
 #include "caf/uri.hpp"
 #include "type_ids.hpp"
