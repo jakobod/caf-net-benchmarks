@@ -70,7 +70,7 @@ behavior accumulator_actor(stateful_actor<accumulator_state>* self,
         auto begin = mean(begins);
         auto end = mean(ends);
         auto duration = end - begin;
-        std::cerr << duration.count() << ", " << std::endl;
+        std::cout << duration.count() << ", ";
         self->quit();
       }
     },
@@ -195,14 +195,11 @@ void net_run_source(net::stream_socket sock, size_t id, size_t streaming_amount,
   auto ret = backend.emplace(make_node_id(*sink_locator.authority_only()),
                              sock);
   if (!ret)
-    std::cerr << " emplace failed with err: " << to_string(ret.error())
-              << std::endl;
+    exit("emplace failed with err: ", ret.error());
   std::cerr << "resolve locator " << to_string(sink_locator) << std::endl;
   auto sink = mm.remote_actor(sink_locator);
-  if (!sink) {
-    std::cerr << "ERROR: " << to_string(sink.error()) << std::endl;
-    abort();
-  }
+  if (!sink)
+    exit(sink.error());
   scoped_actor self{sys};
   auto source = sys.spawn(source_actor, *sink, streaming_amount, payload_size);
   anon_send(source, init_atom_v);
