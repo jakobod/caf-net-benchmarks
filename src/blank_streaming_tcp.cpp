@@ -81,7 +81,6 @@ behavior accumulator_actor(stateful_actor<accumulator_state>* self,
 
 struct source_state {
   payload p;
-  size_t streaming_amount = 0;
 };
 
 behavior source_actor(stateful_actor<source_state>* self, actor sink,
@@ -90,7 +89,6 @@ behavior source_actor(stateful_actor<source_state>* self, actor sink,
   self->link_to(sink);
   return {
     [=](init_atom init) {
-      self->state.streaming_amount = streaming_amount;
       self->state.p.resize(payload_size);
       self->send(sink, init, streaming_amount);
       self->send(self, send_atom_v);
