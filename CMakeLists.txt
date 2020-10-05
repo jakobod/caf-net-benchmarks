@@ -3,8 +3,6 @@
 cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
 project(caf_net_benchmarks CXX)
 
-SET(CMAKE_C_FLAGS_DEBUG "-D_DEBUG")
-
 # Set module path appropriately.
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -42,8 +40,9 @@ message(STATUS "CAF_NET_INCLUDE_DIRS: ${CAF_NET_INCLUDE_DIRS}")
 # Utility macro for adding benchmark targets
 macro(add_target name)
   add_executable(${name}
-                  "src/${name}.cpp"
-                  src/utility.cpp)
+                 "src/${name}.cpp"
+                 src/utility.cpp
+                 src/accumulator.cpp)
   target_link_libraries(${name}
                         ${CAF_EXTRA_LDFLAGS}
                         ${CAF_LIBRARIES}

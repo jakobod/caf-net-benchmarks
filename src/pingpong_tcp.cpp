@@ -21,6 +21,7 @@
 #include <functional>
 #include <iostream>
 
+#include "accumulator.hpp"
 #include "caf/actor_system_config.hpp"
 #include "caf/all.hpp"
 #include "caf/byte.hpp"
@@ -41,64 +42,35 @@ using namespace std::chrono;
 
 namespace {
 
-using payload = std::vector<caf::byte>;
-
-struct tick_state {
-  void tick() {
-    std::cout << count << ", ";
-    count = 0;
-  }
-
-  std::vector<actor> sinks;
+struct ping_state {
   size_t count = 0;
-  size_t iterations = 0;
-
-  template <class Func>
-  void for_each(Func f) {
-    for (const auto& sink : sinks)
-      f(sink);
-  }
 };
 
-behavior ping_actor(stateful_actor<tick_state>* self, size_t num_remote_nodes,
-                    size_t iterations, size_t num_pings, size_t payload_size) {
+behavior ping_actor(stateful_actor<ping_state>* self, const actor& accumulator,
+                    size_t num_pings) {
+  self->set_exit_handler([=](const exit_msg&) { self->quit(); });
+  self->link_to(accumulator);
   return {
-    [=](hello_atom, const actor& sink) {
-      self->state.sinks.push_back(sink);
-      if (self->state.sinks.size() >= num_remote_nodes) {
-        std::cerr << "STARTING BENCHMARK NOW" << std::endl;
-        payload p(payload_size);
-        self->state.for_each([&](const auto& sink) {
-          for (size_t i = 0; i < num_pings; ++i)
-            self->send(sink, p);
-        });
-        self->delayed_send(self, seconds(1), tick_atom_v);
-      }
+    [=](init_atom) {
+      self->send(accumulator, init_atom_v);
+      return ping_atom_v;
     },
-    [=](tick_atom) {
-      self->delayed_send(self, seconds(1), tick_atom_v);
-      self->state.tick();
-      if (++self->state.iterations >= iterations) {
-        std::cout << std::endl;
-        self->quit();
-      }
-    },
-    [=](payload& p) {
-      self->state.count++;
-      return p;
+    [=](pong_atom) {
+      if (++self->state.count < num_pings)
+        return make_message(ping_atom_v);
+      self->send(accumulator, done_atom_v);
+      return make_message(unit);
     },
   };
 }
 
 behavior pong_actor(event_based_actor* self, const actor& source) {
   self->set_exit_handler([=](const exit_msg&) { self->quit(); });
+  self->link_to(source);
   return {
-    [=](start_atom) {
-      self->link_to(source);
-      self->send(source, hello_atom_v, self);
-    },
-    [=](payload& p) { return p; },
-    [=](done_atom) { self->quit(); },
+    [=](start_atom) { self->send(source, init_atom_v); },
+    [=](ping_atom) { return pong_atom_v; },
+    [=](unit_t) { return pong_atom_v; },
   };
 }
 
@@ -108,21 +80,16 @@ struct config : actor_system_config {
     io::middleman::init_global_meta_objects();
     opt_group{custom_options_, "global"}
       .add(mode, "mode,m", "one of 'ioBench', or 'netBench'")
-      .add(iterations, "iterations,i",
-           "number of iterations that should be run")
       .add(num_remote_nodes, "num_nodes,n", "number of remote nodes")
-      .add(num_pings, "pings,p", "number of pings to send")
-      .add(payload_size, "size,s", "size of the payload");
+      .add(num_pings, "pings,p", "number of pings to exchange");
     source_id = *make_uri("tcp://source");
     put(content, "caf.middleman.this-node", source_id);
     put(content, "caf.scheduler.max-threads", 1);
     load<net::middleman, net::backend::tcp>();
   }
 
-  size_t payload_size = 1;
-  size_t iterations = 10;
   size_t num_remote_nodes = 1;
-  size_t num_pings = 1;
+  size_t num_pings = 1024;
   std::string mode = "netBench";
   uri source_id;
 };
@@ -151,7 +118,7 @@ void io_run_node(uint16_t port, int sock) {
       [&](error& err) { exit("failed to resolve", err); });
 }
 
-void net_run_node(uri id, net::stream_socket sock) {
+void net_run_node(uri id, net::stream_socket sock, const uri& src_locator) {
   actor_system_config cfg;
   cfg.load<net::middleman, net::backend::tcp>();
   if (auto err = cfg.parse(0, nullptr))
@@ -163,23 +130,19 @@ void net_run_node(uri id, net::stream_socket sock) {
   actor_system sys{cfg};
   auto& mm = sys.network_manager();
   auto& backend = *dynamic_cast<net::backend::tcp*>(mm.backend("tcp"));
-  auto source_id = *make_uri("tcp://source/name/source");
-  auto ret = backend.emplace(make_node_id(*source_id.authority_only()), sock);
+  auto ret = backend.emplace(make_node_id(*src_locator.authority_only()), sock);
   if (!ret)
     exit("emplace failed", ret.error());
-  auto source = mm.remote_actor(source_id);
+  auto source = mm.remote_actor(src_locator, 2s);
   if (!source)
     exit("remote_actor failed", source.error());
   auto sink = sys.spawn(pong_actor, *source);
   anon_send(sink, start_atom_v);
-  scoped_actor self{sys};
-  self->await_all_other_actors_done();
 }
 
 void caf_main(actor_system& sys, const config& cfg) {
   std::vector<std::thread> threads;
-  auto src = sys.spawn(ping_actor, cfg.num_remote_nodes, cfg.iterations,
-                       cfg.num_pings, cfg.payload_size);
+  auto accumulator = sys.spawn(accumulator_actor, cfg.num_remote_nodes);
   switch (convert(cfg.mode)) {
     case bench_mode::io: {
       std::cerr << "run in 'ioBench' mode" << std::endl;
@@ -188,6 +151,7 @@ void caf_main(actor_system& sys, const config& cfg) {
       auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
       auto bb = mm.named_broker<io::basp_broker>("BASP");
       for (size_t port = 0; port < cfg.num_remote_nodes; ++port) {
+        auto src = sys.spawn(ping_actor, accumulator, cfg.num_pings);
         auto p = *net::make_stream_socket_pair();
         io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, p.first.id);
         anon_send(bb, publish_atom_v, std::move(scribe), uint16_t(8080 + port),
@@ -201,12 +165,15 @@ void caf_main(actor_system& sys, const config& cfg) {
       std::cerr << "run in 'netBench' mode " << std::endl;
       auto& mm = sys.network_manager();
       auto& backend = *dynamic_cast<net::backend::tcp*>(mm.backend("tcp"));
-      mm.publish(src, "source");
       for (size_t i = 0; i < cfg.num_remote_nodes; ++i) {
+        auto src = sys.spawn(ping_actor, accumulator, cfg.num_pings);
+        mm.publish(src, std::string("source-") + std::to_string(i));
+        auto src_locator = *make_uri(std::string("tcp://source/name/source-")
+                                     + std::to_string(i));
         auto p = *make_connected_tcp_socket_pair();
         auto sink_id = *make_uri(std::string("tcp://sink") + std::to_string(i));
         backend.emplace(make_node_id(sink_id), p.first);
-        auto f = [=]() { net_run_node(sink_id, p.second); };
+        auto f = [=]() { net_run_node(sink_id, p.second, src_locator); };
         threads.emplace_back(f);
       }
       break;

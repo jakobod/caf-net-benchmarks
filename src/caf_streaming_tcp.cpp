@@ -20,6 +20,7 @@
 #include <iostream>
 #include <numeric>
 
+#include "accumulator.hpp"
 #include "caf/actor_system_config.hpp"
 #include "caf/all.hpp"
 #include "caf/defaults.hpp"
@@ -39,40 +40,6 @@ using namespace caf;
 using namespace std::chrono;
 
 namespace {
-
-struct accumulator_state {
-  std::vector<microseconds> begins;
-  std::vector<microseconds> ends;
-};
-
-behavior accumulator_actor(stateful_actor<accumulator_state>* self,
-                           size_t num_nodes) {
-  self->state.begins.reserve(num_nodes);
-  self->state.ends.reserve(num_nodes);
-  return {
-    [=](init_atom) { self->state.begins.emplace_back(now<microseconds>()); },
-    [=](done_atom) {
-      auto mean = [=](const auto& x) {
-        auto tmp = std::accumulate(std::next(x.begin()), x.end(), x[0],
-                                   [](const microseconds v1,
-                                      const microseconds v2) -> microseconds {
-                                     return v1 + v2;
-                                   });
-        return tmp / x.size();
-      };
-      self->state.ends.emplace_back(now<microseconds>());
-      if (self->state.ends.size() == self->state.ends.capacity()) {
-        auto& begins = self->state.begins;
-        auto& ends = self->state.ends;
-        auto begin = mean(begins);
-        auto end = mean(ends);
-        auto duration = end - begin;
-        std::cout << duration.count() << ", ";
-        self->quit();
-      }
-    },
-  };
-}
 
 struct source_state {
   size_t left = 0;
@@ -198,7 +165,7 @@ void net_run_source(net::stream_socket sock, size_t id,
                              sock);
   if (!ret)
     exit(ret.error());
-  auto sink = mm.remote_actor(sink_locator);
+  auto sink = mm.remote_actor(sink_locator, 2s);
   if (!sink)
     exit(sink.error());
   scoped_actor self{sys};
