@@ -67,7 +67,7 @@ behavior accumulator_actor(stateful_actor<accumulator_state>* self,
         auto begin = mean(begins);
         auto end = mean(ends);
         auto duration = end - begin;
-        std::cerr << duration.count() << ", " << std::endl;
+        std::cout << duration.count() << ", ";
         self->quit();
       }
     },
