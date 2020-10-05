@@ -17,6 +17,7 @@
  * http://www.boost.org/LICENSE_1_0.txt.                                      *
  ******************************************************************************/
 
+#include <chrono>
 #include <functional>
 #include <iostream>
 #include <numeric>
@@ -47,58 +48,40 @@ namespace {
 
 using payload = std::vector<caf::byte>;
 
-// -- accumulator actor --------------------------------------------------------
-
-struct accumulator_state {
-  std::map<actor, std::vector<size_t>> counts;
-  size_t max = 0;
-  size_t num_dones = 0;
-};
-
-behavior accumulator_actor(stateful_actor<accumulator_state>* self) {
-  return {
-    [=](size_t amount, const actor& whom) {
-      auto& s = self->state;
-      s.counts[whom].push_back(amount);
-      if (s.max < s.counts.at(whom).size())
-        s.max = s.counts.at(whom).size();
-    },
-    [=](done_atom) {
-      auto& s = self->state;
-      std::vector<size_t> acc(s.max);
-      for (const auto& p : s.counts) {
-        for (int i = 0; i < p.second.size(); ++i) {
-          acc.at(i) += p.second.at(i);
-        }
-      }
-      for (auto& v : acc)
-        std::cout << v << ", ";
-      std::cout << std::endl;
-      self->quit();
-    },
-  };
-}
-
 // -- source actor -------------------------------------------------------------
 
 struct source_state {
   payload p;
+  std::chrono::system_clock::time_point begin;
+  size_t streaming_amount = 0;
 };
 
 behavior source_actor(stateful_actor<source_state>* self, actor sink,
-                      size_t payload_size) {
-  self->set_exit_handler([=](const exit_msg&) { self->quit(); });
+                      size_t payload_size, size_t streaming_amount) {
   return {
     [=](init_atom init) {
-      self->link_to(sink);
-      self->send(sink, init);
+      self->state.streaming_amount = streaming_amount;
       self->state.p.resize(payload_size);
+      self->state.begin = std::chrono::system_clock::now();
+      self->send(sink, init, self, streaming_amount);
       self->send(self, send_atom_v);
     },
     [=](send_atom) {
-      for (size_t i = 0; i < 1000; ++i)
+      while (self->state.streaming_amount > 0) {
         self->send(sink, self->state.p);
-      self->send(self, send_atom_v);
+        self->state.streaming_amount -= payload_size;
+      }
+    },
+    [=](done_atom) {
+      auto end = std::chrono::system_clock::now();
+      auto begin = self->state.begin;
+      auto duration = end - begin;
+      std::cerr << duration_cast<microseconds>(duration).count() << "us "
+                << std::endl;
+      self->quit();
+    },
+    [](unit_t) {
+      // nop
     },
   };
 }
@@ -106,26 +89,25 @@ behavior source_actor(stateful_actor<source_state>* self, actor sink,
 // -- sink actor ---------------------------------------------------------------
 
 struct sink_state {
-  size_t payloads = 0;
+  actor source;
+  size_t streaming_amount = 0;
+  size_t received_bytes = 0;
   size_t ticks = 0;
 };
 
-behavior sink_actor(stateful_actor<sink_state>* self, actor accumulator,
-                    size_t iterations) {
+behavior sink_actor(stateful_actor<sink_state>* self) {
   self->set_exit_handler([=](const exit_msg&) { self->quit(); });
   return {
-    [=](init_atom) {
-      self->link_to(accumulator);
-      self->delayed_send(self, 1s, tick_atom_v);
+    [=](init_atom, const actor& source, size_t streaming_amount) {
+      self->link_to(source);
+      self->state.source = source;
+      self->state.streaming_amount = streaming_amount;
     },
-    [=](tick_atom) {
-      self->delayed_send(self, 1s, tick_atom_v);
-      self->send(accumulator, self->state.payloads, self);
-      self->state.payloads = 0;
-      if (++self->state.ticks >= iterations)
-        self->send(accumulator, done_atom_v);
+    [=](const payload& p) {
+      self->state.received_bytes += p.size();
+      if (self->state.received_bytes >= self->state.streaming_amount)
+        self->send(self->state.source, done_atom_v);
     },
-    [=](const payload&) { ++self->state.payloads; },
   };
 }
 
@@ -137,9 +119,8 @@ struct config : actor_system_config {
     io::middleman::init_global_meta_objects();
     opt_group{custom_options_, "global"}
       .add(mode, "mode,m", "one of 'local', 'ioBench', or 'netBench'")
-      .add(iterations, "iterations,i",
-           "number of iterations that should be run")
       .add(payload_size, "size,s", "size of the payload in byte")
+      .add(streaming_amount, "amount,a", "amount of bytes to transmit")
       .add(is_server, "server,S", "toggle server mode")
       .add(host, "host,H", "host to connect to")
       .add(port, "port,p", "port to connect to");
@@ -153,13 +134,15 @@ struct config : actor_system_config {
   bool is_server = false;
   std::string host = "";
   uint16_t port = 0;
+
+  size_t streaming_amount = 1024;
   size_t payload_size = 1;
-  size_t iterations = 10;
   std::string mode = "netBench";
   uri earth_id;
 };
 
-// -- IO client and server -----------------------------------------------------
+// -- IO client and server
+// -----------------------------------------------------
 
 void run_io_server(actor_system& sys, const config& cfg) {
   using namespace caf::io;
@@ -170,8 +153,7 @@ void run_io_server(actor_system& sys, const config& cfg) {
     exit("could not accept connection..", sec::runtime_error);
   std::cout << "*** Accepted connection. socket.id = "
             << std::to_string(sock.socket().id) << std::endl;
-  auto accumulator = sys.spawn(accumulator_actor);
-  auto sink = sys.spawn(sink_actor, accumulator, cfg.iterations);
+  auto sink = sys.spawn(sink_actor);
   auto& mm = sys.middleman();
   auto& mpx = dynamic_cast<network::default_multiplexer&>(mm.backend());
   auto bb = mm.named_broker<basp_broker>("BASP");
@@ -206,7 +188,7 @@ void run_io_client(actor_system&, const config& args) {
         if (ptr == nullptr)
           exit("ERROR: could not get a handle to remote source");
         auto source = sys.spawn(source_actor, actor_cast<actor>(ptr),
-                                args.payload_size);
+                                args.payload_size, args.streaming_amount);
         anon_send(source, init_atom_v);
       },
       [&](error& err) { exit(err); });
@@ -222,8 +204,7 @@ void run_net_server(actor_system& sys, const config& cfg) {
     exit("could not accept connection", sec::runtime_error);
   std::cout << "*** Accepted connection. socket.id = "
             << std::to_string(sock.socket().id) << std::endl;
-  auto accumulator = sys.spawn(accumulator_actor);
-  auto sink = sys.spawn(sink_actor, accumulator, cfg.iterations);
+  auto sink = sys.spawn(sink_actor);
   auto source_id = *make_uri(std::string("tcp://source-node"));
   auto& mm = sys.network_manager();
   auto& backend = *dynamic_cast<backend::tcp*>(mm.backend("tcp"));
@@ -260,7 +241,8 @@ void run_net_client(actor_system&, const config& args) {
   if (!sink)
     exit("remote actor failed: ", sink.error());
   scoped_actor self{sys};
-  auto source = sys.spawn(source_actor, *sink, args.payload_size);
+  auto source = sys.spawn(source_actor, *sink, args.payload_size,
+                          args.streaming_amount);
   anon_send(source, init_atom_v);
 }
 

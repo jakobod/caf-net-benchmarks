@@ -18,6 +18,7 @@
 
 #include "utility.hpp"
 
+#include <chrono>
 #include <cstdlib>
 #include <string>
 #include <utility>
