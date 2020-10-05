@@ -17,6 +17,7 @@
  * http://www.boost.org/LICENSE_1_0.txt.                                      *
  ******************************************************************************/
 
+#include <chrono>
 #include <iostream>
 #include <numeric>
 
@@ -43,87 +44,87 @@ namespace {
 using payload = std::vector<caf::byte>;
 
 struct accumulator_state {
-  std::map<actor, std::vector<size_t>> counts;
-  size_t max = 0;
-  size_t num_dones = 0;
+  std::vector<microseconds> begins;
+  std::vector<microseconds> ends;
 };
 
 behavior accumulator_actor(stateful_actor<accumulator_state>* self,
                            size_t num_nodes) {
+  self->state.begins.reserve(num_nodes);
+  self->state.ends.reserve(num_nodes);
   return {
-    [=](size_t amount, const actor& whom) {
-      auto& s = self->state;
-      s.counts[whom].push_back(amount);
-      if (s.max < s.counts.at(whom).size())
-        s.max = s.counts.at(whom).size();
-    },
+    [=](init_atom) { self->state.begins.emplace_back(now<microseconds>()); },
     [=](done_atom) {
-      if (++self->state.num_dones >= num_nodes) {
-        auto& s = self->state;
-        std::vector<size_t> acc(s.max);
-        for (const auto& p : s.counts) {
-          for (int i = 0; i < p.second.size(); ++i) {
-            acc.at(i) += p.second.at(i);
-          }
-        }
-        for (auto& v : acc)
-          std::cout << v << ", ";
-        std::cout << std::endl;
+      auto mean = [=](const auto& x) {
+        auto tmp = std::accumulate(std::next(x.begin()), x.end(), x[0],
+                                   [](const microseconds v1,
+                                      const microseconds v2) -> microseconds {
+                                     return v1 + v2;
+                                   });
+        return tmp / x.size();
+      };
+      self->state.ends.emplace_back(now<microseconds>());
+      if (self->state.ends.size() == self->state.ends.capacity()) {
+        auto& begins = self->state.begins;
+        auto& ends = self->state.ends;
+        auto begin = mean(begins);
+        auto end = mean(ends);
+        auto duration = end - begin;
+        std::cerr << duration.count() << ", " << std::endl;
         self->quit();
       }
     },
   };
 }
 
-struct tick_state {
-  size_t count = 0;
-  size_t tick_count = 0;
-};
+// -- source actor -------------------------------------------------------------
 
-struct source_state : tick_state {
-  uint64_t current = 0;
+struct source_state {
   payload p;
+  size_t streaming_amount = 0;
 };
 
 behavior source_actor(stateful_actor<source_state>* self, actor sink,
-                      size_t iterations, size_t payload_size) {
+                      size_t payload_size, size_t streaming_amount) {
   self->set_exit_handler([=](const exit_msg&) { self->quit(); });
+  self->link_to(sink);
   return {
     [=](init_atom init) {
-      self->link_to(sink);
-      self->send(sink, init);
+      self->state.streaming_amount = streaming_amount;
       self->state.p.resize(payload_size);
-      self->delayed_send(self, 1s, tick_atom_v);
-      for (size_t credit = 0; credit < 10000; ++credit)
+      self->send(sink, init, streaming_amount);
+      self->send(self, send_atom_v);
+    },
+    [=](send_atom) {
+      for (size_t amount = 0; amount < streaming_amount;
+           amount += self->state.p.size())
         self->send(sink, self->state.p);
     },
-    [=](credit_atom) { self->send(sink, self->state.p); },
-    [=](tick_atom) {
-      self->delayed_send(self, 1s, tick_atom_v);
-      if (++self->state.count >= iterations)
-        self->send(sink, done_atom_v);
-    },
-
   };
-}
+} // namespace
 
-behavior sink_actor(stateful_actor<tick_state>* self, actor accumulator) {
+// -- sink actor ---------------------------------------------------------------
+
+struct sink_state {
+  actor source;
+  size_t streaming_amount = 0;
+  size_t received_bytes = 0;
+  size_t ticks = 0;
+};
+
+behavior sink_actor(stateful_actor<sink_state>* self, actor accumulator) {
   self->set_exit_handler([=](const exit_msg&) { self->quit(); });
+  self->link_to(accumulator);
   return {
-    [=](init_atom) {
-      self->link_to(accumulator);
-      self->delayed_send(self, 1s, tick_atom_v);
+    [=](init_atom, size_t streaming_amount) {
+      self->state.streaming_amount = streaming_amount;
+      self->send(accumulator, init_atom_v);
     },
-    [=](tick_atom) {
-      self->delayed_send(self, 1s, tick_atom_v);
-      self->send(accumulator, self->state.count, self);
-      self->state.count = 0;
+    [=](const payload& p) {
+      self->state.received_bytes += p.size();
+      if (self->state.received_bytes >= self->state.streaming_amount)
+        self->send(accumulator, done_atom_v);
     },
-    [=](const payload&) {
-      ++self->state.count;
-      return credit_atom_v;
-    },
-    [=](done_atom done) { self->send(accumulator, done); },
   };
 }
 
@@ -134,8 +135,8 @@ struct config : actor_system_config {
     opt_group{custom_options_, "global"}
       .add(mode, "mode,m", "one of 'local', 'ioBench', or 'netBench'")
       .add(num_remote_nodes, "num-nodes,n", "number of remote nodes")
-      .add(iterations, "iterations,i",
-           "number of iterations that should be run")
+      .add(streaming_amount, "amount,a",
+           "amount of bytes that should be transmitted")
       .add(payload_size, "size,s", "size of the payload in byte");
 
     earth_id = *make_uri("tcp://earth");
@@ -146,13 +147,13 @@ struct config : actor_system_config {
 
   size_t payload_size = 1;
   size_t num_remote_nodes = 1;
-  size_t iterations = 10;
+  size_t streaming_amount = 1024;
   std::string mode = "netBench";
   uri earth_id;
 };
 
-void io_run_source(net::stream_socket sock, uint16_t port, size_t iterations,
-                   size_t payload_size) {
+void io_run_source(net::stream_socket sock, uint16_t port,
+                   size_t streaming_amount, size_t payload_size) {
   actor_system_config cfg;
   cfg.load<io::middleman>();
   if (auto err = cfg.parse(0, nullptr))
@@ -171,13 +172,13 @@ void io_run_source(net::stream_socket sock, uint16_t port, size_t iterations,
         if (ptr == nullptr)
           exit("ERROR: could not get a handle to remote source");
         auto source = sys.spawn(source_actor, actor_cast<actor>(ptr),
-                                iterations, payload_size);
+                                streaming_amount, payload_size);
         anon_send(source, init_atom_v);
       },
       [&](error& err) { exit(err); });
 }
 
-void net_run_source(net::stream_socket sock, size_t id, size_t iterations,
+void net_run_source(net::stream_socket sock, size_t id, size_t streaming_amount,
                     size_t payload_size) {
   auto source_id = *make_uri(std::string("tcp://source") + std::to_string(id));
   auto sink_locator
@@ -205,7 +206,7 @@ void net_run_source(net::stream_socket sock, size_t id, size_t iterations,
     abort();
   }
   scoped_actor self{sys};
-  auto source = sys.spawn(source_actor, *sink, iterations, payload_size);
+  auto source = sys.spawn(source_actor, *sink, streaming_amount, payload_size);
   anon_send(source, init_atom_v);
 }
 
@@ -226,7 +227,7 @@ void caf_main(actor_system& sys, const config& cfg) {
         anon_send(bb, publish_atom_v, std::move(scribe), uint16_t(8080 + port),
                   actor_cast<strong_actor_ptr>(sink), std::set<std::string>{});
         auto f = [=, &cfg]() {
-          io_run_source(p.second, port, cfg.iterations, cfg.payload_size);
+          io_run_source(p.second, port, cfg.streaming_amount, cfg.payload_size);
         };
         threads.emplace_back(f);
       }
@@ -244,7 +245,7 @@ void caf_main(actor_system& sys, const config& cfg) {
         auto sockets = *make_connected_tcp_socket_pair();
         backend.emplace(make_node_id(source_id), sockets.first);
         auto f = [=, &cfg]() {
-          net_run_source(sockets.second, node, cfg.iterations,
+          net_run_source(sockets.second, node, cfg.streaming_amount,
                          cfg.payload_size);
         };
         threads.emplace_back(f);

@@ -57,6 +57,12 @@ void erase(std::vector<T>& vec, size_t begin, size_t end) {
   vec.erase(vec.begin() + begin, vec.begin() + end);
 }
 
+template <class Unit>
+Unit now() {
+  auto ts = std::chrono::system_clock::now().time_since_epoch();
+  return std::chrono::duration_cast<Unit>(ts);
+}
+
 void exit(const std::string& msg = "", const caf::error& err = caf::none);
 
 void exit(const caf::error& err);
