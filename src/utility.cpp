@@ -24,6 +24,8 @@
 
 #include "caf/error.hpp"
 #include "caf/expected.hpp"
+#include "caf/ip_endpoint.hpp"
+#include "caf/net/ip.hpp"
 #include "caf/net/socket_guard.hpp"
 #include "caf/net/stream_socket.hpp"
 #include "caf/net/tcp_accept_socket.hpp"
@@ -70,6 +72,30 @@ make_connected_tcp_socket_pair() {
     return make_pair(sock1, *res);
   else
     return res.error();
+}
+
+caf::net::socket_guard<caf::net::tcp_stream_socket> accept() {
+  using namespace caf::net;
+  caf::uri::authority_type auth;
+  auto acceptor = make_socket_guard(*make_tcp_accept_socket(auth));
+  std::cout << "*** Acceptor spawned on port " << local_port(acceptor.socket())
+            << std::endl;
+  if (auto res = accept(acceptor.socket()))
+    return make_socket_guard(*res);
+  return make_socket_guard(tcp_stream_socket(invalid_socket_id));
+}
+
+caf::net::socket_guard<caf::net::tcp_stream_socket> connect(std::string host,
+                                                            uint16_t port) {
+  using namespace caf::net;
+  if (host == "" || port == 0)
+    exit("host AND port have to be specified!");
+  for (const auto& addr : ip::resolve(host)) {
+    caf::ip_endpoint ep{addr, port};
+    if (auto ret = make_connected_tcp_stream_socket(ep))
+      return make_socket_guard(*ret);
+  }
+  return make_socket_guard(tcp_stream_socket(invalid_socket_id));
 }
 
 void exit(const std::string& msg, const caf::error& err) {

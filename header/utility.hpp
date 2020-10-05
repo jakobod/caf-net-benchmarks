@@ -25,6 +25,7 @@
 #include "caf/expected.hpp"
 #include "caf/fwd.hpp"
 #include "caf/net/fwd.hpp"
+#include "caf/net/socket_guard.hpp"
 
 using socket_pair = std::pair<caf::net::stream_socket, caf::net::stream_socket>;
 
@@ -34,6 +35,11 @@ bench_mode convert(const std::string& str);
 
 caf::expected<std::pair<caf::net::stream_socket, caf::net::stream_socket>>
 make_connected_tcp_socket_pair();
+
+caf::net::socket_guard<caf::net::tcp_stream_socket> accept();
+
+caf::net::socket_guard<caf::net::tcp_stream_socket> connect(std::string host,
+                                                            uint16_t port);
 
 template <class T>
 void print_vector(const std::string& name, const std::vector<T>& vec) {
