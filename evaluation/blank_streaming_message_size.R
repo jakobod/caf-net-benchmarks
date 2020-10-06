@@ -60,7 +60,7 @@ pp_plot <- ggplot(ppdf, aes(x=message_size, y=avg, color=proto)) +
   ) +
   scale_color_brewer(type="qual", palette=6) +
   scale_fill_brewer(palette="Dark2") +
-  ggtitle("Streaming 1GB") +
+  ggtitle("Streaming 100 MiB") +
   labs(x="message size [Byte]", y="duration [ms]")
 
 tikz(file="tikz/blank_streaming_message_sizes.tikz", sanitize=TRUE, width=3.4, height=2.3)
