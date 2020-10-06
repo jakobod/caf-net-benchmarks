@@ -72,7 +72,6 @@ behavior pong_actor(event_based_actor* self, const actor& source) {
   return {
     [=](start_atom) { self->send(source, init_atom_v); },
     [=](const payload& p) { return p; },
-    [=](unit_t) {},
   };
 }
 

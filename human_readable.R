@@ -35,38 +35,4 @@ human_numbers <- function(x = NULL, smbl ="", signif = 1){
   sapply(x,humanity)
 }
 
-byte_numbers <- function(x = NULL, smbl ="", signif = 1){
-  bytes <- function(y){
-    
-    if (!is.na(y)){
-      Ki <- round(abs(y) / 1024, signif)
-      Mi <- round(abs(y) / 1048576, signif)
-      Gi <- round(abs(y) / 1073741824, signif)
-      Ti <- round(abs(y) / 1099511627776, signif)
-      
-      if ( y >= 0 ){
-        y_is_positive <- ""
-      } else {
-        y_is_positive <- "-"
-      }
-      
-      if ( Ki < 1 ) {
-        paste0( y_is_positive, smbl, round(abs(y), signif ))
-      } else if ( Mi < 1){
-        paste0 (y_is_positive, smbl,  Ki , "Ki")
-      } else if (Gi < 1){
-        paste0 (y_is_positive, smbl, Mi ,"Mi")
-      }else if(Ti < 1){
-        paste0 (y_is_positive, smbl, Gi ,"Gi")
-      } else {
-        paste0 (y_is_positive, smbl,  comma(Ti), "Ti")
-      }
-    } else if (is.na(y) | is.null(y)){
-      "-"
-    }
-  }
-  
-  sapply(x,bytes)
-}
-
 

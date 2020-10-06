@@ -17,7 +17,7 @@ out_file="evaluation/out/pingpong-tcp-net-message-size"
 echo "pingpong-tcp-net-message-size"
 init_file message_size ${out_file}
 message_size=1
-while [ $message_size -le 1024 ]; do
+while [ $message_size -le 4096 ]; do
   echo "-- message-size = ${message_size} -----------------------------------"
   printf "${message_size}, " >> ${out_file}.out
   for i in 0 1 2 3 4 5 6 7 8 9; do
@@ -36,7 +36,7 @@ out_file="evaluation/out/pingpong-tcp-io-message-size"
 echo "pingpong-tcp-io-message-size"
 init_file message_size ${out_file}
 message_size=1
-while [ $message_size -le 1024 ]; do
+while [ $message_size -le 4096 ]; do
   echo "-- message-size = ${message_size} -----------------------------------"
   printf "${message_size}, " >> ${out_file}.out
   for i in 0 1 2 3 4 5 6 7 8 9; do
