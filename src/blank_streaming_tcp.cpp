@@ -51,8 +51,10 @@ struct source_state {
   std::vector<payload> payloads;
 
   void fill_payloads(size_t byte_amount, size_t message_size) {
+    size_t allocated = 0;
     while (byte_amount > 0) {
       auto size = std::min(byte_amount, message_size);
+      allocated += size;
       payloads.emplace_back(payload(size));
       byte_amount -= size;
     }
@@ -60,7 +62,7 @@ struct source_state {
 };
 
 behavior source_actor(stateful_actor<source_state>* self, actor sink,
-                      size_t message_size, size_t streaming_amount) {
+                      size_t streaming_amount, size_t message_size) {
   self->set_exit_handler([=](const exit_msg&) { self->quit(); });
   self->link_to(sink);
   return {

@@ -8,16 +8,16 @@ source("evaluation/human_readable.R")
 
 streaming_net <- read.csv("evaluation/out/blank-streaming-net-message-size.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 streaming_net$avg <- rowMeans(streaming_net[,2:11])
-streaming_net$avg <- streaming_net$avg/1000000
+streaming_net$avg <- streaming_net$avg/1000
 streaming_net$sdev <- apply(streaming_net[,2:11], 1, sd)
-streaming_net$sdev <- streaming_net$sdev/1000000
+streaming_net$sdev <- streaming_net$sdev/1000
 streaming_net$proto <- 'libcaf_net'
 
 streaming_io <- read.csv("evaluation/out/blank-streaming-io-message-size.out", sep=",", as.is=c(numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric))
 streaming_io$avg <- rowMeans(streaming_io[,2:11])
-streaming_io$avg <- streaming_io$avg/1000000
+streaming_io$avg <- streaming_io$avg/1000
 streaming_io$sdev <- apply(streaming_io[,2:11], 1, sd)
-streaming_io$sdev <- streaming_io$sdev/1000000
+streaming_io$sdev <- streaming_io$sdev/1000
 streaming_io$proto <- 'libcaf_io'
 
 ppdf <- rbind(streaming_net, streaming_io)
@@ -61,9 +61,9 @@ pp_plot <- ggplot(ppdf, aes(x=message_size, y=avg, color=proto)) +
   scale_color_brewer(type="qual", palette=6) +
   scale_fill_brewer(palette="Dark2") +
   ggtitle("Streaming 1GB") +
-  labs(x="message size [Byte]", y="duration [s]")
+  labs(x="message size [Byte]", y="duration [ms]")
 
-tikz(file="tikz/streaming.tikz", sanitize=TRUE, width=3.4, height=2.3)
+tikz(file="tikz/blank_streaming_message_sizes.tikz", sanitize=TRUE, width=3.4, height=2.3)
 pp_plot
 dev.off()
 
