@@ -42,24 +42,26 @@ using namespace std::chrono;
 
 namespace {
 
+using payload = std::vector<byte>;
+
 struct ping_state {
   size_t count = 0;
 };
 
 behavior ping_actor(stateful_actor<ping_state>* self, const actor& accumulator,
-                    size_t num_pings) {
+                    size_t num_pings, size_t payload_size) {
   self->set_exit_handler([=](const exit_msg&) { self->quit(); });
   self->link_to(accumulator);
   return {
     [=](init_atom) {
       self->send(accumulator, init_atom_v);
-      return ping_atom_v;
+      payload p(payload_size);
+      return p;
     },
-    [=](pong_atom) {
-      if (++self->state.count < num_pings)
-        return make_message(ping_atom_v);
-      self->send(accumulator, done_atom_v);
-      return make_message(unit);
+    [=](const payload& p) {
+      if (++self->state.count >= num_pings)
+        self->send(accumulator, done_atom_v);
+      return p;
     },
   };
 }
@@ -69,8 +71,8 @@ behavior pong_actor(event_based_actor* self, const actor& source) {
   self->link_to(source);
   return {
     [=](start_atom) { self->send(source, init_atom_v); },
-    [=](ping_atom) { return pong_atom_v; },
-    [=](unit_t) { return pong_atom_v; },
+    [=](const payload& p) { return p; },
+    [=](unit_t) {},
   };
 }
 
@@ -81,13 +83,15 @@ struct config : actor_system_config {
     opt_group{custom_options_, "global"}
       .add(mode, "mode,m", "one of 'ioBench', or 'netBench'")
       .add(num_remote_nodes, "num_nodes,n", "number of remote nodes")
-      .add(num_pings, "pings,p", "number of pings to exchange");
+      .add(num_pings, "pings,p", "number of pings to exchange")
+      .add(payload_size, "size,s", "size of the exchanged payload");
     source_id = *make_uri("tcp://source");
     put(content, "caf.middleman.this-node", source_id);
     put(content, "caf.scheduler.max-threads", 1);
     load<net::middleman, net::backend::tcp>();
   }
 
+  size_t payload_size;
   size_t num_remote_nodes = 1;
   size_t num_pings = 1024;
   std::string mode = "netBench";
@@ -151,7 +155,8 @@ void caf_main(actor_system& sys, const config& cfg) {
       auto& mpx = dynamic_cast<io::network::default_multiplexer&>(mm.backend());
       auto bb = mm.named_broker<io::basp_broker>("BASP");
       for (size_t port = 0; port < cfg.num_remote_nodes; ++port) {
-        auto src = sys.spawn(ping_actor, accumulator, cfg.num_pings);
+        auto src = sys.spawn(ping_actor, accumulator, cfg.num_pings,
+                             cfg.payload_size);
         auto p = *net::make_stream_socket_pair();
         io::scribe_ptr scribe = make_counted<scribe_impl>(mpx, p.first.id);
         anon_send(bb, publish_atom_v, std::move(scribe), uint16_t(8080 + port),
@@ -166,7 +171,8 @@ void caf_main(actor_system& sys, const config& cfg) {
       auto& mm = sys.network_manager();
       auto& backend = *dynamic_cast<net::backend::tcp*>(mm.backend("tcp"));
       for (size_t i = 0; i < cfg.num_remote_nodes; ++i) {
-        auto src = sys.spawn(ping_actor, accumulator, cfg.num_pings);
+        auto src = sys.spawn(ping_actor, accumulator, cfg.num_pings,
+                             cfg.payload_size);
         mm.publish(src, std::string("source-") + std::to_string(i));
         auto src_locator = *make_uri(std::string("tcp://source/name/source-")
                                      + std::to_string(i));
