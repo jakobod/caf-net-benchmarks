@@ -20,6 +20,7 @@
 #include <chrono>
 #include <iostream>
 #include <numeric>
+#include <queue>
 
 #include "accumulator.hpp"
 #include "caf/actor_system_config.hpp"
@@ -47,23 +48,30 @@ using payload = std::vector<caf::byte>;
 // -- source actor -------------------------------------------------------------
 
 struct source_state {
-  payload p;
+  std::vector<payload> payloads;
+
+  void fill_payloads(size_t byte_amount, size_t message_size) {
+    while (byte_amount > 0) {
+      auto size = std::min(byte_amount, message_size);
+      payloads.emplace_back(payload(size));
+      byte_amount -= size;
+    }
+  }
 };
 
 behavior source_actor(stateful_actor<source_state>* self, actor sink,
-                      size_t payload_size, size_t streaming_amount) {
+                      size_t message_size, size_t streaming_amount) {
   self->set_exit_handler([=](const exit_msg&) { self->quit(); });
   self->link_to(sink);
   return {
     [=](init_atom init) {
-      self->state.p.resize(payload_size);
+      self->state.fill_payloads(streaming_amount, message_size);
       self->send(sink, init, streaming_amount);
-      self->send(self, send_atom_v);
     },
     [=](send_atom) {
-      for (size_t amount = 0; amount < streaming_amount;
-           amount += self->state.p.size())
-        self->send(sink, self->state.p);
+      auto& payloads = self->state.payloads;
+      for (size_t i = 0; i < payloads.size(); ++i)
+        self->send(sink, std::move(payloads[i]));
     },
   };
 } // namespace
@@ -84,6 +92,7 @@ behavior sink_actor(stateful_actor<sink_state>* self, actor accumulator) {
     [=](init_atom, size_t streaming_amount) {
       self->state.streaming_amount = streaming_amount;
       self->send(accumulator, init_atom_v);
+      return send_atom_v;
     },
     [=](const payload& p) {
       self->state.received_bytes += p.size();
@@ -102,7 +111,7 @@ struct config : actor_system_config {
       .add(num_remote_nodes, "num-nodes,n", "number of remote nodes")
       .add(streaming_amount, "amount,a",
            "amount of bytes that should be transmitted")
-      .add(payload_size, "size,s", "size of the payload in byte");
+      .add(message_size, "size,s", "size of the payload in byte");
 
     earth_id = *make_uri("tcp://earth");
     put(content, "caf.middleman.this-node", earth_id);
@@ -110,7 +119,7 @@ struct config : actor_system_config {
     load<net::middleman, net::backend::tcp>();
   }
 
-  size_t payload_size = 1;
+  size_t message_size = 1;
   size_t num_remote_nodes = 1;
   size_t streaming_amount = 1024;
   std::string mode = "netBench";
@@ -118,7 +127,7 @@ struct config : actor_system_config {
 };
 
 void io_run_source(net::stream_socket sock, uint16_t port,
-                   size_t streaming_amount, size_t payload_size) {
+                   size_t streaming_amount, size_t message_size) {
   actor_system_config cfg;
   cfg.load<io::middleman>();
   if (auto err = cfg.parse(0, nullptr))
@@ -137,14 +146,14 @@ void io_run_source(net::stream_socket sock, uint16_t port,
         if (ptr == nullptr)
           exit("ERROR: could not get a handle to remote source");
         auto source = sys.spawn(source_actor, actor_cast<actor>(ptr),
-                                streaming_amount, payload_size);
+                                streaming_amount, message_size);
         anon_send(source, init_atom_v);
       },
       [&](error& err) { exit(err); });
 }
 
 void net_run_source(net::stream_socket sock, size_t id, size_t streaming_amount,
-                    size_t payload_size) {
+                    size_t message_size) {
   auto source_id = *make_uri(std::string("tcp://source") + std::to_string(id));
   auto sink_locator
     = *make_uri(std::string("tcp://earth/name/sink") + std::to_string(id));
@@ -168,7 +177,7 @@ void net_run_source(net::stream_socket sock, size_t id, size_t streaming_amount,
   if (!sink)
     exit(sink.error());
   scoped_actor self{sys};
-  auto source = sys.spawn(source_actor, *sink, streaming_amount, payload_size);
+  auto source = sys.spawn(source_actor, *sink, streaming_amount, message_size);
   anon_send(source, init_atom_v);
 }
 
@@ -189,7 +198,7 @@ void caf_main(actor_system& sys, const config& cfg) {
         anon_send(bb, publish_atom_v, std::move(scribe), uint16_t(8080 + port),
                   actor_cast<strong_actor_ptr>(sink), std::set<std::string>{});
         auto f = [=, &cfg]() {
-          io_run_source(p.second, port, cfg.streaming_amount, cfg.payload_size);
+          io_run_source(p.second, port, cfg.streaming_amount, cfg.message_size);
         };
         threads.emplace_back(f);
       }
@@ -208,7 +217,7 @@ void caf_main(actor_system& sys, const config& cfg) {
         backend.emplace(make_node_id(source_id), sockets.first);
         auto f = [=, &cfg]() {
           net_run_source(sockets.second, node, cfg.streaming_amount,
-                         cfg.payload_size);
+                         cfg.message_size);
         };
         threads.emplace_back(f);
       }

@@ -57,7 +57,7 @@ pp_plot_log <- ggplot(ppdf, aes(x=message_size, y=avg, color=proto)) +
   scale_color_brewer(type="qual", palette=6) +
   scale_fill_brewer(palette="Dark2") +
   ggtitle("Pingpong") +
-  labs(x="message_siue [Byte]", y="duration [ms]")
+  labs(x="message_size [Byte]", y="duration [ms]")
 
 tikz(file="tikz/pingpong-message-size.tikz", sanitize=TRUE, width=3.4, height=2.3)
 pp_plot_log
