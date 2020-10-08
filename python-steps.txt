@@ -6,3 +6,6 @@ pip install -r requirements.txt
 
 # Close session
 deactivate
+
+# Save installed packages
+pip freeze > requirements.txt

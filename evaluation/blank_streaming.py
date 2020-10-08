@@ -25,26 +25,30 @@ my_cs = ["#375E97", "#FB6542"]
 # plt.rc('figure', figsize=(8 * 0.7, 3 * 0.7))
 plt.rc('font', size=12)
 
-def calculate(file):
+
+def calculate(file, label):
   print(f'interpreting {file}')
   print(f'reading {file}')
   with open(file, 'r', newline='') as f:
     # [('key1', 'mean', 'sdev')]
-    runs = []
+    message_sizes = []
     vals = []
+    labels = []
     for i, line in enumerate(f):
       # Skip first line with labels
       if i == 0:
         continue
       split_line = line.rstrip(',\n').split(', ')
-      run = int(split_line[0])
-      values = split_line[1:]
+      message_size = int(split_line[0])
+      values = split_line[1:-1]
       values = np.array(values).astype(np.long)
-      for r in range(run):
-        runs.append(run)
-      vals.extend(values)
+      for i in range(len(values)):
+        message_sizes.append(message_size)
+      # values are in useconds and should be displayed in mseconds
+      vals.extend(values/1000)
+      labels = [label] * len(message_sizes)
       # sdevs.append(np.std(values))
-    return {'runs': runs, 'values': vals}
+    return {'message_size': message_sizes, 'values': vals, 'label': labels}
 
 
 def main():
@@ -58,13 +62,26 @@ def main():
   # if not Path(args.file).is_file():
   #   print('`file` must be a file!')
   #   return
-  reg = calculate('evaluation/regression/regression.out')
-  df = pd.DataFrame(reg, columns = ['runs', 'values'])
-  print (df)
+  streaming_net = calculate(
+      'evaluation/out/blank-streaming-net-message-size.out', 'net')
+  streaming_io = calculate(
+      'evaluation/out/blank-streaming-io-message-size.out', 'io')
 
+  io_df = pd.DataFrame(streaming_io, columns=[
+      'message_size', 'values', 'label'])
+  net_df = pd.DataFrame(streaming_net, columns=[
+      'message_size', 'values', 'label'])
+  frames = [io_df, net_df]
+  df = pd.concat(frames)
   # Apply the default theme
   sns.set_theme()
-  sns.boxplot(data=df, x="runs", y="values")
+  fig, ax = plt.subplots()
+  ax.set_xscale('log', base=2)
+  ax.set(xlabel='message size [Byte]', ylabel='duration [ms]')
+  plt.ticklabel_format(style='plain', axis='y')
+
+  sns.lineplot(data=df, x="message_size", y="values",
+               hue="label", err_style="bars")
 
   # plt.grid(True)
   # plt.errorbar(reg[0], reg[1], yerr=reg[2], capsize=5)
@@ -82,7 +99,7 @@ def main():
   # # plt.xticks(fontsize=17)
   # # plt.yticks(fontsize=17)
 
-  plotname = 'convergence.pdf'
+  plotname = 'figs/blank_streaming.pdf'
   print(f'plotting {plotname}')
 
   plt.savefig(plotname)
