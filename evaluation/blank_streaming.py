@@ -52,52 +52,33 @@ def calculate(file, label):
 
 
 def main():
-  # parser = argparse.ArgumentParser(description='Plot Given CSV Data')
-  # parser.add_argument(
-  #     'file', type=str, help='file to process')
-  # parser.add_argument(
-  #     'plotname', type=str, help='name of the resulting pdf')
-  # args = parser.parse_args()
-
-  # if not Path(args.file).is_file():
-  #   print('`file` must be a file!')
-  #   return
+  streaming_net_fix = calculate(
+      'evaluation/out/blank-streaming-net-message-size-prefix-fix.out', 'net-fix')
+  streaming_io_fix = calculate(
+      'evaluation/out/blank-streaming-io-message-size-prefix-fix.out', 'io-fix')
   streaming_net = calculate(
       'evaluation/out/blank-streaming-net-message-size.out', 'net')
   streaming_io = calculate(
       'evaluation/out/blank-streaming-io-message-size.out', 'io')
 
+  io_fix_df = pd.DataFrame(streaming_io_fix, columns=[
+      'message_size', 'values', 'label'])
+  net_fix_df = pd.DataFrame(streaming_net_fix, columns=[
+      'message_size', 'values', 'label'])
   io_df = pd.DataFrame(streaming_io, columns=[
       'message_size', 'values', 'label'])
   net_df = pd.DataFrame(streaming_net, columns=[
       'message_size', 'values', 'label'])
-  frames = [io_df, net_df]
+  frames = [io_fix_df, net_fix_df, io_df, net_df]
   df = pd.concat(frames)
   # Apply the default theme
   sns.set_theme()
-  fig, ax = plt.subplots()
+  ax = sns.lineplot(data=df, x="message_size", y="values",
+                    hue="label", err_style="bars", err_kws={'capsize': 5})
   ax.set_xscale('log', base=2)
   ax.set(xlabel='message size [Byte]', ylabel='duration [ms]')
   plt.ticklabel_format(style='plain', axis='y')
-
-  sns.lineplot(data=df, x="message_size", y="values",
-               hue="label", err_style="bars")
-
-  # plt.grid(True)
-  # plt.errorbar(reg[0], reg[1], yerr=reg[2], capsize=5)
-  # # Plot Description
-  # plt.title('Convergence', loc='left', fontsize=18)
-  # plt.xlabel('accumulated runs [#]')
-  # plt.ylabel('Duration [ms]')
-
-  # # plt.legend(bbox_to_anchor=(0, 0, .4, 1))
-
-  # # plt.yticks(y_ticks, y_labels)
-  # # plt.xticks(rotation=45)
-  # # ax.set_yticklabels(y_labels)
-
-  # # plt.xticks(fontsize=17)
-  # # plt.yticks(fontsize=17)
+  plt.title('Streaming', loc='left', fontsize=18)
 
   plotname = 'figs/blank_streaming.pdf'
   print(f'plotting {plotname}')
