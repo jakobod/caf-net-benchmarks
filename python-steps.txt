@@ -1,0 +1,11 @@
+# Create python environment
+python3 -m venv envs
+source envs/bin/activate
+pip install -r requirements.txt
+# ... now You can run scripts with their dependencies installed.
+
+# Close session
+deactivate
+
+# Save installed packages
+pip freeze > requirements.txt
