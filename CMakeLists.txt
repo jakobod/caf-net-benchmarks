@@ -3,6 +3,8 @@
 cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
 project(caf_net_benchmarks CXX)
 
+SET(CMAKE_C_FLAGS_DEBUG "-D_DEBUG")
+
 # Set module path appropriately.
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -58,5 +60,5 @@ add_target(blank_streaming_client_server)
 add_target(pingpong_tcp)
 #add_target(pingpong_udp)
 #add_target(pingpong_tcp_timing)
-#add_target(pingpong_tcp_blank)
 #add_target(pingpong_tcp_send_time)
+add_target(streaming_raw_tcp)

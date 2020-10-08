@@ -1,6 +1,8 @@
 // accumulator.hpp
 // @author Jakob Otto
 
+#pragma once
+
 #include <chrono>
 #include <numeric>
 #include <vector>
