@@ -35,7 +35,7 @@ error receive(stream_socket sock, byte_span buf) {
   auto data = buf.data();
   auto size = buf.size();
   auto received = 0;
-  while(received < buf.size()) {
+  while (received < buf.size()) {
     auto ret = read(sock, make_span(data, size));
     if (ret > 0)
       received += ret;
@@ -65,16 +65,15 @@ size_t read_size_t(stream_socket sock) {
 void run_server(stream_socket sock) {
   const auto message_size = read_size_t(sock);
   byte_buffer buf(message_size);
-  while(true) {
-    if(auto err = receive(sock, buf)) {
-      if(err == sec::socket_disconnected)
+  while (true) {
+    if (auto err = receive(sock, buf)) {
+      if (err == sec::socket_disconnected)
         break;
       exit("receive failed", err);
     }
-    if(auto err = send(sock, buf))
+    if (auto err = send(sock, buf))
       exit("send failed", err);
   }
-  std::cerr << "server done. TERMINATING" << std::endl;
 }
 
 void run_client(stream_socket sock, size_t amount, size_t message_size) {
@@ -82,12 +81,11 @@ void run_client(stream_socket sock, size_t amount, size_t message_size) {
   size_t rounds = 0;
   payload p(message_size);
   do {
-    if(auto err = send(sock, p))
+    if (auto err = send(sock, p))
       exit("send failed", err);
-    if(auto err = receive(sock, p))
+    if (auto err = receive(sock, p))
       exit("send failed", err);
-  } while(++rounds < amount);
-  std::cerr << "client done. TERMINATING" << std::endl;
+  } while (++rounds < amount);
 }
 
 int main(int argc, char* argv[]) {
@@ -120,7 +118,6 @@ int main(int argc, char* argv[]) {
         message_size = atoi(optarg);
         break;
       default:
-        fprintf(stderr, "Usage: %s [hp] [file...]\n", argv[0]);
         exit(EXIT_FAILURE);
     }
   }
@@ -131,7 +128,6 @@ int main(int argc, char* argv[]) {
       exit("accept failed");
     if (auto err = nodelay(sock.socket(), true))
       exit("nodelay failed", err);
-    std::cerr << "accepted! Starting benchmark now." << std::endl;
     run_server(sock.socket());
   } else if (is_client) {
     if (port == 0)
@@ -141,7 +137,6 @@ int main(int argc, char* argv[]) {
       exit("connect failed");
     if (auto err = nodelay(sock.socket(), true))
       exit("nodelay failed", err);
-    std::cerr << "connected! Starting benchmark now." << std::endl;
     auto start = now();
     run_client(sock.socket(), amount, message_size);
     end(start);

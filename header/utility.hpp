@@ -69,7 +69,7 @@ template <class Unit>
 void end(Unit begin) {
   auto end = now<Unit>();
   auto duration = end - begin;
-  std::cout << std::to_string(duration.count()) << ", " << std::endl;
+  std::cout << std::to_string(duration.count()) << ", ";
 }
 
 void exit(const std::string& msg = "", const caf::error& err = caf::none);
