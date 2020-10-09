@@ -17,47 +17,49 @@ using namespace caf::net;
 
 using payload = std::vector<byte>;
 
-error send(stream_socket sock, const_byte_span payload) {
-  while (payload.size() > 0) {
+ptrdiff_t send(stream_socket sock, const_byte_span payload) {
+  while (!payload.empty()) {
     auto ret = write(sock, payload);
     if (ret > 0)
       payload = payload.subspan(ret);
     else if (ret == 0)
-      return sec::socket_disconnected;
+      return 0;
     else if (!last_socket_error_is_temporary())
-      return static_cast<sec>(last_socket_error());
+      return -1;
   }
-  return none;
+  return 1;
 }
 
 void send_size_t(stream_socket sock, size_t value) {
   value = htonll(value);
   if (write(sock, make_span(reinterpret_cast<byte*>(&value), sizeof(size_t)))
-      < 0)
+      <= 0)
     exit("send_size_t failed");
 }
 
 size_t read_size_t(stream_socket sock) {
   size_t amount = 0;
   if (read(sock, make_span(reinterpret_cast<byte*>(&amount), sizeof(size_t)))
-      < 0)
+      <= 0)
     exit("read_size_t failed");
   return ntohll(amount);
 }
 
 void run_server(stream_socket sock) {
   byte_buffer buf(4096); // simply preallocate some memory;
-  auto amount = read_size_t(sock);
+  const auto amount = read_size_t(sock);
+  size_t num_bytes = 0;
   // now we know how many bytes to receive before disconnecting.
-  while (amount) {
+  while (num_bytes < amount) {
     auto ret = read(sock, buf);
     if (ret > 0)
-      amount -= ret;
+      num_bytes += ret;
     if (ret == 0)
       exit("remote has disconnected unexpectedly");
     if (ret < 0 && !last_socket_error_is_temporary())
       exit("read failed");
   }
+  send(sock, make_span(buf.data(), 1));
 }
 
 void run_client(stream_socket sock, size_t amount, size_t message_size) {
@@ -65,17 +67,16 @@ void run_client(stream_socket sock, size_t amount, size_t message_size) {
   size_t sent = 0;
   payload p(message_size);
   while (sent < amount) {
-    if (auto err = send(sock, p))
-      exit("write failed", err);
+    auto ret = send(sock, p);
+    if (ret <= 0)
+      exit("write failed");
     sent += p.size();
   }
-  std::array<byte, 1> buf;
+  std::array<byte, 1> dummy;
   ptrdiff_t res = 0;
   do {
-    res = read(sock, buf);
-  } while (res && last_socket_error_is_temporary());
-  if (res < 0)
-    exit("final check failed");
+    res = read(sock, make_span(dummy.data(), dummy.size()));
+  } while (res != 1);
 }
 
 int main(int argc, char* argv[]) {
@@ -146,6 +147,7 @@ int main(int argc, char* argv[]) {
       auto start = now();
       run_client(client_guard.socket(), amount, message_size);
       end(start);
+      server_t.join();
     } else {
       exit("make_connected_tcp_socket_pair failed", socks.error());
     }
