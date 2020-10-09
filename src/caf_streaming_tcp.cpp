@@ -145,8 +145,8 @@ void io_run_source(net::stream_socket sock, uint16_t port,
       [&](error& err) { exit(err); });
 }
 
-void net_run_source(net::stream_socket sock, size_t id,
-                    size_t streaming_amount) {
+void net_run_source(net::stream_socket sock, size_t id, size_t streaming_amount,
+                    bool& initialized, bool& benchmark_running) {
   auto source_id = *make_uri(std::string("tcp://source") + std::to_string(id));
   auto sink_locator
     = *make_uri(std::string("tcp://earth/name/sink") + std::to_string(id));
@@ -168,6 +168,10 @@ void net_run_source(net::stream_socket sock, size_t id,
   auto sink = mm.remote_actor(sink_locator, 2s);
   if (!sink)
     exit(sink.error());
+  // THIS IS INHERENTLY UNSAFE AND ONLY FOR TESTING PURPOSES!!
+  initialized = true;
+  while (!benchmark_running)
+    std::this_thread::sleep_for(1ms);
   scoped_actor self{sys};
   auto source = sys.spawn(source_actor, *sink, streaming_amount);
   self->send(source, start_atom_v);
@@ -198,6 +202,7 @@ void caf_main(actor_system& sys, const config& cfg) {
     }
     case bench_mode::net: {
       std::cerr << "run in 'netBench' mode " << std::endl;
+      bool benchmark_running = false;
       auto& mm = sys.network_manager();
       auto& backend = *dynamic_cast<net::backend::tcp*>(mm.backend("tcp"));
       for (size_t node = 0; node < cfg.num_remote_nodes; ++node) {
@@ -207,11 +212,17 @@ void caf_main(actor_system& sys, const config& cfg) {
         sys.registry().put(std::string("sink") + std::to_string(node), sink);
         auto sockets = *make_connected_tcp_socket_pair();
         backend.emplace(make_node_id(source_id), sockets.first);
-        auto f = [=, &cfg]() {
-          net_run_source(sockets.second, node, cfg.streaming_amount);
+        bool initialized = false;
+        auto f = [=, &cfg, &initialized, &benchmark_running]() {
+          net_run_source(sockets.second, node, cfg.streaming_amount,
+                         initialized, benchmark_running);
         };
         threads.emplace_back(f);
+        // THIS IS INHERENTLY UNSAFE AND ONLY FOR TESTING PURPOSES!!
+        while (!initialized)
+          std::this_thread::sleep_for(1ms);
       }
+      benchmark_running = true;
       break;
     }
     default:
