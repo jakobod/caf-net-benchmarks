@@ -90,7 +90,7 @@ struct config : actor_system_config {
     load<net::middleman, net::backend::tcp>();
   }
 
-  size_t payload_size;
+  size_t payload_size = 1;
   size_t num_remote_nodes = 1;
   size_t num_pings = 1024;
   std::string mode = "netBench";
