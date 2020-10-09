@@ -52,26 +52,26 @@ def calculate(file, label):
 
 
 def main():
-  # streaming_net_fix = calculate(
-  #     'evaluation/out/blank-streaming-net-message-size-prefix-fix.out', 'net-fix')
-  # streaming_io_fix = calculate(
-  #     'evaluation/out/blank-streaming-io-message-size-prefix-fix.out', 'io-fix')
-  streaming_net = calculate(
-      'evaluation/out/blank-streaming-net-message-size.out', 'net')
-  streaming_io = calculate(
-      'evaluation/out/blank-streaming-io-message-size.out', 'io')
-  streaming_raw = calculate(
-      'evaluation/out/blank-streaming-raw-message-size.out', 'raw')
+  # pingpong_net_fix = calculate(
+  #     'evaluation/out/blank-pingpong-net-message-size-prefix-fix.out', 'net-fix')
+  # pingpong_io_fix = calculate(
+  #     'evaluation/out/blank-pingpong-io-message-size-prefix-fix.out', 'io-fix')
+  pingpong_net = calculate(
+      'evaluation/out/pingpong-tcp-net-message-size.out', 'net')
+  pingpong_io = calculate(
+      'evaluation/out/pingpong-tcp-io-message-size.out', 'io')
+  pingpong_raw = calculate(
+      'evaluation/out/pingpong-tcp-raw-message-size.out', 'raw')
 
-  # io_fix_df = pd.DataFrame(streaming_io_fix, columns=[
+  # io_fix_df = pd.DataFrame(pingpong_io_fix, columns=[
   #     'message_size', 'values', 'label'])
-  # net_fix_df = pd.DataFrame(streaming_net_fix, columns=[
+  # net_fix_df = pd.DataFrame(pingpong_net_fix, columns=[
   #     'message_size', 'values', 'label'])
-  io_df = pd.DataFrame(streaming_io, columns=[
+  io_df = pd.DataFrame(pingpong_io, columns=[
       'message_size', 'values', 'label'])
-  net_df = pd.DataFrame(streaming_net, columns=[
+  net_df = pd.DataFrame(pingpong_net, columns=[
       'message_size', 'values', 'label'])
-  raw_df = pd.DataFrame(streaming_raw, columns=[
+  raw_df = pd.DataFrame(pingpong_raw, columns=[
       'message_size', 'values', 'label'])
   frames = [raw_df, io_df, net_df]
   df = pd.concat(frames)
@@ -82,9 +82,9 @@ def main():
   ax.set_xscale('log', base=2)
   ax.set(xlabel='message size [Byte]', ylabel='duration [ms]')
   plt.ticklabel_format(style='plain', axis='y')
-  plt.title('Streaming', loc='left', fontsize=18)
+  plt.title('Pingpong', loc='left', fontsize=18)
 
-  plotname = 'figs/blank_streaming.pdf'
+  plotname = 'figs/pingpong.pdf'
   print(f'plotting {plotname}')
 
   plt.savefig(plotname)
