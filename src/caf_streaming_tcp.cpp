@@ -206,7 +206,9 @@ void caf_main(actor_system& sys, const config& cfg) {
         auto sink = sys.spawn(sink_actor, accumulator);
         sys.registry().put(std::string("sink") + std::to_string(node), sink);
         auto sockets = *make_connected_tcp_socket_pair();
-        backend.emplace(make_node_id(source_id), sockets.first);
+        auto entry = backend.emplace(make_node_id(source_id), sockets.first);
+        if (!entry)
+          exit("emplace failed", entry.error());
         auto f = [=, &cfg]() {
           net_run_source(sockets.second, node, cfg.streaming_amount);
         };
