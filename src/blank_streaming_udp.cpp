@@ -46,57 +46,89 @@ namespace {
 
 using payload = std::vector<caf::byte>;
 
-struct ping_state {
-  size_t count = 0;
+// -- source actor -------------------------------------------------------------
+
+struct source_state {
+  std::vector<payload> payloads;
+
+  void fill_payloads(size_t byte_amount, size_t message_size) {
+    size_t allocated = 0;
+    while (byte_amount > 0) {
+      auto size = std::min(byte_amount, message_size);
+      allocated += size;
+      payloads.emplace_back(payload(size));
+      byte_amount -= size;
+    }
+  }
 };
 
-behavior ping_actor(stateful_actor<ping_state>* self, const actor& accumulator,
-                    size_t num_pings, size_t payload_size) {
+behavior source_actor(stateful_actor<source_state>* self, actor sink,
+                      size_t streaming_amount, size_t message_size) {
+  self->set_exit_handler([=](const exit_msg&) { self->quit(); });
+  self->link_to(sink);
+  return {
+    [=](init_atom init) {
+      self->state.fill_payloads(streaming_amount, message_size);
+      self->send(sink, init, streaming_amount);
+    },
+    [=](send_atom) {
+      auto& payloads = self->state.payloads;
+      for (size_t i = 0; i < payloads.size(); ++i)
+        self->send(sink, std::move(payloads[i]));
+    },
+  };
+}
+
+// -- sink actor ---------------------------------------------------------------
+
+struct sink_state {
+  actor source;
+  size_t streaming_amount = 0;
+  size_t received_bytes = 0;
+  size_t ticks = 0;
+};
+
+behavior sink_actor(stateful_actor<sink_state>* self, actor accumulator) {
   self->set_exit_handler([=](const exit_msg&) { self->quit(); });
   self->link_to(accumulator);
   return {
-    [=](init_atom) {
+    [=](init_atom, size_t streaming_amount) {
+      self->state.streaming_amount = streaming_amount;
       self->send(accumulator, init_atom_v);
-      payload p(payload_size);
-      return p;
+      return send_atom_v;
     },
     [=](const payload& p) {
-      if (++self->state.count >= num_pings)
+      self->state.received_bytes += p.size();
+      std::cout << "got " << self->state.received_bytes << std::endl;
+      if (self->state.received_bytes >= self->state.streaming_amount)
         self->send(accumulator, done_atom_v);
-      return p;
     },
   };
 }
 
-behavior pong_actor(event_based_actor* self, const actor& source) {
-  self->set_exit_handler([=](const exit_msg&) { self->quit(); });
-  self->link_to(source);
-  return {
-    [=](start_atom) { self->send(source, init_atom_v); },
-    [=](const payload& p) { return p; },
-  };
-}
 struct config : actor_system_config {
   config() {
     init_global_meta_objects<caf::id_block::caf_net_benchmark>();
     net::middleman::init_global_meta_objects();
     opt_group{custom_options_, "global"}
-      .add(num_remote_nodes, "num_nodes,n", "number of remote nodes")
-      .add(num_pings, "pings,p", "number of pings to exchange")
-      .add(payload_size, "size,s", "size of the exchanged payload");
+      .add(num_remote_nodes, "num-nodes,n", "number of remote nodes")
+      .add(streaming_amount, "amount,a",
+           "amount of bytes that should be transmitted")
+      .add(message_size, "size,s", "size of the payload in byte");
     put(content, "caf.middleman.this-node", this_node);
     put(content, "caf.scheduler.max-threads", 1);
     load<net::middleman, net::backend::udp>();
   }
 
-  size_t payload_size = 1;
+  size_t message_size = 1;
   size_t num_remote_nodes = 1;
-  size_t num_pings = 1024;
+  size_t streaming_amount = 1024;
   uri this_node;
 };
 
 void net_run_source_node(uri this_node, const std::string& remote_str,
-                         net::udp_datagram_socket sock, uint16_t port) {
+                         net::udp_datagram_socket sock, uint16_t port,
+                         size_t streaming_amount, size_t message_size) {
   std::cerr << "net_run_source_node thread started! " << std::endl;
   std::cerr << "thread got socket " << sock.id << std::endl;
   actor_system_config cfg;
@@ -118,14 +150,14 @@ void net_run_source_node(uri this_node, const std::string& remote_str,
   auto ret = backend.emplace(sock, port);
   if (!ret)
     exit("thread backend.emplace failed: ", ret.error());
-  auto remote_locator = make_uri(remote_str + "/name/ping");
+  auto remote_locator = make_uri(remote_str + "/name/sink");
   if (!remote_locator)
     exit("thread make_uri failed: ", remote_locator.error());
-  auto source = mm.remote_actor(*remote_locator, 2s);
-  if (!source)
-    exit("thread remote actor failed: ", source.error());
-  auto sink = sys.spawn(pong_actor, *source);
-  anon_send(sink, start_atom_v);
+  auto sink = mm.remote_actor(*remote_locator, 2s);
+  if (!sink)
+    exit("thread remote actor failed: ", sink.error());
+  auto source = sys.spawn(source_actor, *sink, streaming_amount, message_size);
+  anon_send(source, init_atom_v);
 }
 
 void caf_main(actor_system&, const config& args) {
@@ -162,9 +194,8 @@ void caf_main(actor_system&, const config& args) {
   if (!err)
     exit("main backend.emplace() failed: ", err.error());
   auto accumulator = sys.spawn(accumulator_actor, args.num_remote_nodes);
-  auto ping = sys.spawn(ping_actor, accumulator, args.num_pings,
-                        args.payload_size);
-  mm.publish(ping, "ping");
+  auto sink = sys.spawn(sink_actor, accumulator);
+  mm.publish(sink, "sink");
   std::this_thread::sleep_for(500ms);
   std::vector<std::thread> threads;
   std::cerr << "starting remote node now!" << std::endl;
@@ -184,8 +215,10 @@ void caf_main(actor_system&, const config& args) {
     std::cerr << "ping_id = " << to_string(*this_node)
               << " pong_id = " << to_string(*pong_id) << std::endl;
     std::cerr << "main passing to thread socket " << sock.id << std::endl;
-    auto f = [pong_id = *pong_id, this_node_str, sock = sock, port = port]() {
-      net_run_source_node(pong_id, this_node_str, sock, port);
+    auto f = [pong_id = *pong_id, this_node_str, sock = sock, port = port,
+              &args]() {
+      net_run_source_node(pong_id, this_node_str, sock, port,
+                          args.streaming_amount, args.message_size);
     };
     threads.emplace_back(f);
   }
