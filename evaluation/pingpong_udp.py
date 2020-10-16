@@ -59,32 +59,34 @@ def x_formatter(x, pos):
 
 
 def main():
-  # pingpong_net_fix = calculate(
-  #     'evaluation/out/blank-pingpong-net-message-size-prefix-fix.out', 'net-fix')
-  # pingpong_io_fix = calculate(
-  #     'evaluation/out/blank-pingpong-io-message-size-prefix-fix.out', 'io-fix')
-  pingpong_net = calculate(
-      'evaluation/out/pingpong-tcp-net-message-size.out', 'net')
-  pingpong_io = calculate(
-      'evaluation/out/pingpong-tcp-io-message-size.out', 'io')
+  pingpong_udp = calculate(
+      'evaluation/out/pingpong-udp-net-message-size.out', 'udp')
+  udp_df = pd.DataFrame(pingpong_udp, columns=[
+      'message_size', 'values', 'label'])
 
   # Apply the default theme
   # sns.set_theme()
   sns.set_style("ticks")
-  io_df = pd.DataFrame(pingpong_io, columns=[
+  udp_df = pd.DataFrame(pingpong_udp, columns=[
       'message_size', 'values', 'label'])
-  net_df = pd.DataFrame(pingpong_net, columns=[
-      'message_size', 'values', 'label'])
-  frames = [io_df, net_df]
-  df = pd.concat(frames)
 
   # Apply the default theme
-  # sns.set_theme()
   sns.set_style("ticks")
-  ax = sns.lineplot(data=df, x="message_size", y="values",
-                    hue="label", style="label", markers=True,
+  # ax = sns.lineplot(data=df, x="message_size", y="values",
+  #                   hue="label", style="label", markers=True,
+  #                   dashes=False, err_style="bars", err_kws={'capsize': 5})
+
+  palette = iter(sns.color_palette())
+  colors = [next(palette) for i in range(0, 3)]
+  ax = sns.lineplot(data=udp_df, palette=[colors[2]], x="message_size", y="values",
+                    hue="label", style="label", markers="s",
                     dashes=False, err_style="bars", err_kws={'capsize': 5})
-  plt.ylim(0, 3000)
+  # ax = sns.lineplot(data=net_df, palette=[colors[1]], x="message_size", y="values",
+  #                   hue="label", style="label", markers='x',
+  #                   dashes=False, err_style="bars", err_kws={'capsize': 5})
+  # ax = sns.lineplot(data=udp_df, palette=[colors[2]], x="message_size", y="values",
+  #                   markers='+', s=10, dashes=False, err_style="bars", err_kws={'capsize': 5})
+  plt.ylim(0, 8700)
   ax.tick_params(bottom=True, top=True, left=True, right=True, direction="in")
   ax.legend(loc='upper center',
             ncol=4, fancybox=False, shadow=False, bbox_to_anchor=(0.49, 1.20),)
@@ -95,7 +97,7 @@ def main():
   plt.ticklabel_format(style='plain', axis='y')
   ax.xaxis.set_major_formatter(plt.FuncFormatter(x_formatter))
 
-  plotname = 'figs/pingpong.pdf'
+  plotname = 'figs/pingpong_udp.pdf'
   print(f'plotting {plotname}')
 
   plt.savefig(plotname, bbox_inches='tight')

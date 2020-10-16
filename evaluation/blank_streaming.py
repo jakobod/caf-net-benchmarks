@@ -59,31 +59,21 @@ def x_formatter(x, pos):
 
 
 def main():
-  # streaming_net_fix = calculate(
-  #     'evaluation/out/blank-streaming-net-message-size-prefix-fix.out', 'net-fix')
-  # streaming_io_fix = calculate(
-  #     'evaluation/out/blank-streaming-io-message-size-prefix-fix.out', 'io-fix')
   streaming_net = calculate(
       'evaluation/out/blank-streaming-net-message-size.out', 'net')
   streaming_io = calculate(
       'evaluation/out/blank-streaming-io-message-size.out', 'io')
-  streaming_raw = calculate(
-      'evaluation/out/blank-streaming-raw-message-size.out', 'raw')
 
-  # io_fix_df = pd.DataFrame(streaming_io_fix, columns=[
-  #     'message_size', 'values', 'label'])
-  # net_fix_df = pd.DataFrame(streaming_net_fix, columns=[
-  #     'message_size', 'values', 'label'])
   io_df = pd.DataFrame(streaming_io, columns=[
       'message_size', 'values', 'label'])
   net_df = pd.DataFrame(streaming_net, columns=[
       'message_size', 'values', 'label'])
-  raw_df = pd.DataFrame(streaming_raw, columns=[
-      'message_size', 'values', 'label'])
-  frames = [raw_df, io_df, net_df]
+
+  frames = [io_df, net_df]
   df = pd.concat(frames)
   # Apply the default theme
   sns.set_style("ticks")
+  plt.ylim(0, 3000)
   ax = sns.lineplot(data=df, x="message_size", y="values",
                     hue="label", style="label", markers=True,
                     dashes=False, err_style="bars", err_kws={'capsize': 5})
