@@ -5,6 +5,8 @@
 
 #include "caf/binary_deserializer.hpp"
 #include "caf/binary_serializer.hpp"
+#include "caf/detail/serialized_size.hpp"
+#include "caf/detail/socket_sys_includes.hpp"
 #include "caf/error.hpp"
 #include "caf/net/socket_guard.hpp"
 #include "caf/net/stream_socket.hpp"
@@ -66,50 +68,52 @@ size_t read_size_t(stream_socket sock) {
 void run_server(stream_socket sock) {
   const auto message_size = read_size_t(sock);
   byte_buffer p(message_size);
+  auto receive_amount = detail::serialized_size(p);
   byte_buffer send_buf;
   byte_buffer recv_buf;
   while (true) {
-    recv_buf.resize(message_size+2);
+    recv_buf.resize(receive_amount);
     if (auto err = receive(sock, recv_buf)) {
       if (err == sec::socket_disconnected)
         break;
-      exit("server receive failed", err);
+      exit("receive failed", err);
     }
     binary_deserializer source{nullptr, recv_buf};
     byte_buffer buf;
     if (!source.apply_object(buf))
-      exit("server deserializing failed", source.get_error());
+      exit("deserializing failed", source.get_error());
     // serialize data before sending
     binary_serializer sink{nullptr, send_buf};
     if (!sink.apply_object(p))
-      exit("server serializing failed", sink.get_error());
+      exit("serializing failed", sink.get_error());
     if (auto err = send(sock, send_buf))
-      exit("server send failed", err);
+      exit("send failed", err);
     send_buf.clear();
   }
 }
 
 void run_client(stream_socket sock, size_t amount, size_t message_size) {
   send_size_t(sock, message_size);
-  size_t rounds = 0;
   payload p(message_size);
+  auto receive_amount = detail::serialized_size(p);
+  size_t rounds = 0;
+
   byte_buffer send_buf;
   byte_buffer recv_buf;
   do {
     binary_serializer sink{nullptr, send_buf};
     if (!sink.apply_object(p))
-      exit("client serializing failed", sink.get_error());
+      exit("serializing failed", sink.get_error());
     if (auto err = send(sock, send_buf))
-      exit("client send failed", err);
+      exit("send failed", err);
     send_buf.clear();
     // receive message
-    recv_buf.resize(message_size+2);
-    byte_buffer buf;
+    recv_buf.resize(receive_amount);
     if (auto err = receive(sock, recv_buf))
-      exit("client send failed", err);
+      exit("send failed", err);
     binary_deserializer source{nullptr, recv_buf};
-    if (!source.apply_object(buf))
-      exit("client deserializing failed", source.get_error());
+    if (!source.apply_object(p))
+      exit("deserializing failed", sink.get_error());
 
   } while (++rounds < amount);
 }

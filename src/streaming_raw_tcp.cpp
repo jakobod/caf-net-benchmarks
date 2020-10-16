@@ -3,6 +3,9 @@
 #include <thread>
 #include <unistd.h>
 
+#include "caf/binary_deserializer.hpp"
+#include "caf/binary_serializer.hpp"
+#include "caf/detail/serialized_size.hpp"
 #include "caf/detail/socket_sys_includes.hpp"
 #include "caf/error.hpp"
 #include "caf/net/socket_guard.hpp"
@@ -31,6 +34,22 @@ ptrdiff_t send(stream_socket sock, const_byte_span payload) {
   return 1;
 }
 
+error receive(stream_socket sock, byte_span buf) {
+  auto data = buf.data();
+  auto size = buf.size();
+  auto received = 0;
+  while (received < buf.size()) {
+    auto ret = read(sock, make_span(data, size));
+    if (ret > 0)
+      received += ret;
+    else if (ret == 0)
+      return sec::socket_disconnected;
+    else if (!last_socket_error_is_temporary())
+      return sec::runtime_error;
+  }
+  return none;
+}
+
 void send_size_t(stream_socket sock, size_t value) {
   value = htonl(value);
   if (write(sock, make_span(reinterpret_cast<byte*>(&value), sizeof(size_t)))
@@ -47,30 +66,42 @@ size_t read_size_t(stream_socket sock) {
 }
 
 void run_server(stream_socket sock) {
-  byte_buffer buf(4096); // simply preallocate some memory;
   const auto amount = read_size_t(sock);
+  const auto message_size = read_size_t(sock);
+  payload p(message_size);
+  auto receive_amount = detail::serialized_size(p);
+  byte_buffer recv_buf(receive_amount);
   size_t num_bytes = 0;
   // now we know how many bytes to receive before disconnecting.
   while (num_bytes < amount) {
-    auto ret = read(sock, buf);
-    if (ret > 0)
-      num_bytes += ret;
-    if (ret == 0)
-      exit("remote has disconnected unexpectedly");
-    if (ret < 0 && !last_socket_error_is_temporary())
-      exit("read failed");
+    if (auto err = receive(sock, recv_buf)) {
+      if (err == sec::socket_disconnected)
+        break;
+      exit("receive failed", err);
+    }
+    binary_deserializer source{nullptr, recv_buf};
+    if (!source.apply_object(p))
+      exit("deserializing failed", source.get_error());
+    num_bytes += p.size();
+    p.clear();
   }
-  send(sock, make_span(buf.data(), 1));
+  send(sock, make_span(recv_buf.data(), 1));
 }
 
 void run_client(stream_socket sock, size_t amount, size_t message_size) {
   send_size_t(sock, amount);
-  size_t sent = 0;
+  send_size_t(sock, message_size);
   payload p(message_size);
+  size_t sent = 0;
+  byte_buffer send_buf;
   while (sent < amount) {
-    auto ret = send(sock, p);
+    binary_serializer sink{nullptr, send_buf};
+    if (!sink.apply_object(p))
+      exit("serializing failed", sink.get_error());
+    auto ret = send(sock, send_buf);
     if (ret <= 0)
       exit("write failed");
+    send_buf.clear();
     sent += p.size();
   }
   std::array<byte, 1> dummy;
