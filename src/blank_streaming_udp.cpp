@@ -99,6 +99,7 @@ behavior sink_actor(stateful_actor<sink_state>* self, actor accumulator) {
     },
     [=](const payload& p) {
       self->state.received_bytes += p.size();
+      std::cout << "got " << self->state.received_bytes << std::endl;
       if (self->state.received_bytes >= self->state.streaming_amount)
         self->send(accumulator, done_atom_v);
     },

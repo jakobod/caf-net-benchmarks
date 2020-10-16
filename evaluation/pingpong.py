@@ -19,10 +19,11 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
+from matplotlib.ticker import ScalarFormatter
 from pathlib import Path
 
 my_cs = ["#375E97", "#FB6542"]
-# plt.rc('figure', figsize=(8 * 0.7, 3 * 0.7))
+plt.rc('figure', figsize=(4*1.3, 2.5*1.2))
 plt.rc('font', size=12)
 
 
@@ -51,6 +52,12 @@ def calculate(file, label):
     return {'message_size': message_sizes, 'values': vals, 'label': labels}
 
 
+def x_formatter(x, pos):
+  if x >= 1024:
+    return '{:>}Ki'.format(int(x / 1024))
+  return '{:>}'.format(int(x))
+
+
 def main():
   # pingpong_net_fix = calculate(
   #     'evaluation/out/blank-pingpong-net-message-size-prefix-fix.out', 'net-fix')
@@ -62,6 +69,8 @@ def main():
       'evaluation/out/pingpong-tcp-io-message-size.out', 'io')
   pingpong_raw = calculate(
       'evaluation/out/pingpong-tcp-raw-message-size.out', 'raw')
+  pingpong_udp = calculate(
+      'evaluation/out/pingpong-udp-net-message-size.out', 'udp')
 
   # io_fix_df = pd.DataFrame(pingpong_io_fix, columns=[
   #     'message_size', 'values', 'label'])
@@ -73,21 +82,31 @@ def main():
       'message_size', 'values', 'label'])
   raw_df = pd.DataFrame(pingpong_raw, columns=[
       'message_size', 'values', 'label'])
-  frames = [raw_df, io_df, net_df]
+  udp_df = pd.DataFrame(pingpong_udp, columns=[
+      'message_size', 'values', 'label'])
+  frames = [raw_df, io_df, net_df, udp_df]
   df = pd.concat(frames)
+
   # Apply the default theme
-  sns.set_theme()
+  # sns.set_theme()
+  sns.set_style("ticks")
   ax = sns.lineplot(data=df, x="message_size", y="values",
-                    hue="label", err_style="bars", err_kws={'capsize': 5})
+                    hue="label", style="label", markers=True,
+                    dashes=False, err_style="bars", err_kws={'capsize': 5})
+  ax.tick_params(bottom=True, top=True, left=True, right=True, direction="in")
+  ax.legend(loc='upper center',
+            ncol=4, fancybox=False, shadow=False, bbox_to_anchor=(0.49, 1.20),)
   ax.set_xscale('log', base=2)
-  ax.set(xlabel='message size [Byte]', ylabel='duration [ms]')
+  for axis in [ax.xaxis, ax.yaxis]:
+    axis.set_major_formatter(ScalarFormatter())
+  ax.set(xlabel='Message Size [Byte]', ylabel='Duration [ms]')
   plt.ticklabel_format(style='plain', axis='y')
-  plt.title('Pingpong', loc='left', fontsize=18)
+  ax.xaxis.set_major_formatter(plt.FuncFormatter(x_formatter))
 
   plotname = 'figs/pingpong.pdf'
   print(f'plotting {plotname}')
 
-  plt.savefig(plotname)
+  plt.savefig(plotname, bbox_inches='tight')
   # # # Clear plt object for next plot.. Maybe
   plt.clf()
   plt.cla()

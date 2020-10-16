@@ -12,28 +12,47 @@ function init_file() {
 }
 
 
-echo "-- rawBenchmark ---------------------------------------------------------"
-echo "blank-streaming-raw-message-size"
-out_file="evaluation/out/blank-streaming-raw-message-size"
-init_file message_size ${out_file}
-message_size=512
-while [ $message_size -le 140000 ]; do
-  echo "-- message-size = ${message_size} ---------------------------------------"
-  printf "${message_size}, " >> ${out_file}.out
-  for i in {1..50}; do
-    while : ; do
-      ./release/streaming_raw_tcp -m$message_size -a104857600 >> ${out_file}.out 2> ${out_file}.err
-      [[ $? != 0 ]] || break # if program exited with error rerun it.
-    done;
-  done;
-  echo "" >> ${out_file}.out
-  echo "-- message-size = ${message_size} DONE ----------------------------------"
-  message_size=$((message_size*2))
-done;
+# echo "-- rawBenchmark ---------------------------------------------------------"
+# echo "blank-streaming-raw-message-size"
+# out_file="evaluation/out/blank-streaming-raw-message-size"
+# init_file message_size ${out_file}
+# message_size=512
+# while [ $message_size -le 140000 ]; do
+#   echo "-- message-size = ${message_size} ---------------------------------------"
+#   printf "${message_size}, " >> ${out_file}.out
+#   for i in {1..50}; do
+#     while : ; do
+#       ./release/streaming_raw_tcp -m$message_size -a104857600 >> ${out_file}.out 2> ${out_file}.err
+#       [[ $? != 0 ]] || break # if program exited with error rerun it.
+#     done;
+#   done;
+#   echo "" >> ${out_file}.out
+#   echo "-- message-size = ${message_size} DONE ----------------------------------"
+#   message_size=$((message_size*2))
+# done;
 
-echo "-- netBenchmark ---------------------------------------------------------"
-echo "blank-streaming-net-message-size"
-out_file="evaluation/out/blank-streaming-net-message-size"
+# echo "-- netBenchmark TCP ---------------------------------------------------------"
+# echo "blank-streaming-net-message-size"
+# out_file="evaluation/out/blank-streaming-net-message-size"
+# init_file message_size ${out_file}
+# message_size=512
+# while [ $message_size -le 140000 ]; do
+#   echo "-- message-size = ${message_size} ---------------------------------------"
+#   printf "${message_size}, " >> ${out_file}.out
+#   for i in {1..50}; do
+#     while : ; do
+#       ./release/blank_streaming_tcp -mnetBench -s$message_size -a104857600 >> ${out_file}.out 2> ${out_file}.err
+#       [[ $? != 0 ]] || break # if program exited with error rerun it.
+#     done;
+#   done;
+#   echo "" >> ${out_file}.out
+#   echo "-- message-size = ${message_size} DONE ----------------------------------"
+#   message_size=$((message_size*2))
+# done;
+
+echo "-- netBenchmark UDP ---------------------------------------------------------"
+echo "blank-streaming-net-udp-message-size"
+out_file="evaluation/out/blank-streaming-net-udp-message-size"
 init_file message_size ${out_file}
 message_size=512
 while [ $message_size -le 140000 ]; do
@@ -41,7 +60,7 @@ while [ $message_size -le 140000 ]; do
   printf "${message_size}, " >> ${out_file}.out
   for i in {1..50}; do
     while : ; do
-      ./release/blank_streaming_tcp -mnetBench -s$message_size -a104857600 >> ${out_file}.out 2> ${out_file}.err
+      ./release/blank_streaming_udp -s$message_size -a104857600 >> ${out_file}.out 2> ${out_file}.err
       [[ $? != 0 ]] || break # if program exited with error rerun it.
     done;
   done;
@@ -65,25 +84,25 @@ done;
 # done;
 
 
-echo "-- ioBenchmark ---------------------------------------------------------"
+# echo "-- ioBenchmark ---------------------------------------------------------"
 
-echo "blank-streaming-io-message-size"
-out_file="evaluation/out/blank-streaming-io-message-size"
-init_file message_size ${out_file}
-message_size=512
-while [ $message_size -le 140000 ]; do
-  echo "-- message-size = ${message_size} ---------------------------------------"
-  printf "${message_size}, " >> ${out_file}.out
-  for i in {1..50}; do
-    while : ; do
-      ./release/blank_streaming_tcp -mioBench -s$message_size -a104857600 >> ${out_file}.out 2> ${out_file}.err
-      [[ $? != 0 ]] || break # if program exited with error rerun it.
-    done;
-  done;
-  echo "" >> ${out_file}.out
-  echo "-- message-size = ${message_size} DONE ----------------------------------"
-  message_size=$((message_size*2))
-done;
+# echo "blank-streaming-io-message-size"
+# out_file="evaluation/out/blank-streaming-io-message-size"
+# init_file message_size ${out_file}
+# message_size=512
+# while [ $message_size -le 140000 ]; do
+#   echo "-- message-size = ${message_size} ---------------------------------------"
+#   printf "${message_size}, " >> ${out_file}.out
+#   for i in {1..50}; do
+#     while : ; do
+#       ./release/blank_streaming_tcp -mioBench -s$message_size -a104857600 >> ${out_file}.out 2> ${out_file}.err
+#       [[ $? != 0 ]] || break # if program exited with error rerun it.
+#     done;
+#   done;
+#   echo "" >> ${out_file}.out
+#   echo "-- message-size = ${message_size} DONE ----------------------------------"
+#   message_size=$((message_size*2))
+# done;
 
 # out_file="evaluation/out/blank-streaming-io-remote-nodes"
 # echo "-- blank-streaming-io-remote-nodes --------------------------------------"
